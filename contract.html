@@ -1,10 +1,130 @@
 <html>
 <head></head>
 <body>
+
 <h1>What do we need?</h1>
 
 <p>The 'features' we describe here can be collectively called <em>value constraints.</em> We want to use them to put some <em>constraints</em> into the program that cannot be handled by the current C++ type system.</p>
 <h2>Specify function's domain</h2>
 <p>The problem goes back to mathematics. Certain functions are well defined only for a subset of values of the input type. for instance a square root over real numbers is not defined for negative numbers. What does it mean for a function in a programming language like C++ that it is not defined? Currently there are two approaches. One is to detect the value of the parameter(s) that the function should not be prepared for and execute a different logic: returning a special value, throwing an exception, etc. Using our example with a square root, a corresponding function <code>sqrt()</code> could be defined as follows:</p>
+
+<pre>double sqrt(double x)
+{
+  if (x &gt;= 0.0) {
+    //<em> do proper algorithm</em>
+  }
+  else {
+    return numeric_limits&lt;double&gt;::signaling_NaN();
+    // <em>or throw an exception</em>
+  }
+}
+</pre>
+
+<p>What it effectively does is that such functions do not restrict their domain. They are well defined for every value of an input type, and do other things than only "proper algorithms". This means that our function can be used for detecting negative numbers:
+</p>
+
+<pre>double is_negative(double x)
+{
+  return isnan(sqrt(x));
+}
+</pre>
+
+<p>Another way of approaching the function domain problem is to informally 'announce' that the function is not defined for certain values of input types and implement it with the assumption that the undesired values are never passed to the function:</p>
+
+<pre>
+double sqrt(double x)
+{
+  // proper algorithm:
+  double y = 1.0;
+  double prev_y;
+ 
+  do {
+    prev_y = y;
+    y = (y + x / y) * 0.5;
+  }
+  while (!closeEnough(y, prev_y));
+ 
+  return y;
+}
+</pre>
+
+<p>This uses Newton's Iteration algorithm. The loop will terminate when values <code>y</code> and <code>prev_y</code> become close enough. They will only do that when <code>x</code> is non-negative. Supplying a negative value will make the loop run forever and hang the program. Even a clever analyser is unlikely to detect from the function body that passing a negative input to this function is something wrong. But everything is fine as long as no negative number is passed in. 'Announcing' that the function is not prepared for just any input is informal: it is either written in the comment, or in paper or html documentation, or only spread by word, or assumed to be obvious. This is risks an unintended negative program behaviour, like a halt, or a UB. However, it is often preferred because of performance and inability to come up with a reasonable fall-back action. Consider <code>std::vector::operator[]</code>, it does not check the bounds for performance reasons. If it was used in the following code:</p>
+
+<pre>
+for (int i = 0; i != vec.size(); ++i) {
+  if (i &gt; 0) cout &lt;&lt; ", ";
+  cout &lt;&lt; vec[i];
+}
+</pre>
+
+<p>The condition in the loop already checks if the index is within bounds. If <code>operator[]</code> was also checking the same condition inside, we would be wasting time on doing redundant checks. Also, for some functions it is not possible to think of any fall-back action. For instance <code>std::vector::swap</code> must not throw exceptions and returns <code>void</code>, yet, it is not well defined when two vectors' allocators do not compare equal.</p>
+
+<p>Not checking for argument being within domain and delegating the check to the callers is desirable, especially that the caller is in a better position in verifying if the domain of the function. Consider:</p>
+
+<pre>return sqrt(abs(x));</pre>
+
+<p>The caller can be sure that no negative value is passed to function <code>sqrt()</code> even though no check is performed at all. Function domain defined this way is a <em>contract</em> between function author and function callers. The author defines the domain and assumes he will not get values from outside the domain. The caller guarantees that she will not put pass values outside the domain. Out of all contracts described here, this one is the most likely to be broken, because it is the only one where the person responsible for guaranteeing it is different than the person declaring the contract. The user may not be aware that a function has requirements on the values of parameters, or may misunderstand what the requirement is. Therefore this contract requires the most serious attention and support in the language.</p>
+
+<p>What we need is the ability to declare the function's domain along with the function, so that it is visible to the callers and to the automated tools. How the tools can handle this is a secondary issue, but the behaviour can be: (1) automated documentation generation, (2) additional warnings from static analysers, (3) additional instrumentation injected by compilers, (4) compiler optimizations based on domain declarations.</p>
+
+<h2>Specify function's co-domain</h2>
+
+<p>In the above example with function <code>abs()</code> a hypothetical tool could detect that expression <code>sqrt(abs(x))</code> is always fine only if it knew that the co-domain of <code>abs</code> is equal (or smaller) than the domain of <code>sqrt</code>. We need to be able to constrain the allowed function output in order for automated tools to be able to verify if other functions' domain requirements are satisfied. </p>
+
+<p>In this case a function author specifies the contract and (likely) the same author guarantees it. Function's user can rely on the guarantee. It is much less likely that this contract is broken, because it is the same person that declares and later ensures the obligation. And conversely, if the author makes an error in the function, he is equally likely to make an error in specifying the contract.</p>
+
+
+<h2>Block-level assertions</h2>
+
+<p>This type of value constraint is quite familiar to many C++ user, as it is implemented with macro <code>assert</code> and some similar tools in many libraries. If we think of it as a contract, this time a function author defines it, he ensures that it holds, and he is the benefactor of the contract: he guarantees something to himself, namely that certain state of a block-local variable or set of variables shall never occur at the point of the assertion. At the same time the function author guarantees something that he can be held accountable for, and relies on the guarantee expressed with the assertion.</p>
+
+<h2>Class-level assertions</h2>
+
+<p>A similar constraint on variables is often required for (non-static) data members of objects of a given class. Consider the following example:</p>
+
+<pre>class WeighedAverage
+{
+  double wgt1_ = 0.5;
+  double wgt2_ = 0.5;
+public:
+  double average(double val1, double val2) const; 
+  <em>// ensures: answer is between val1 and val2</em>
+  { return wgt1_ * val1 + wgt2_ * val2; }
+
+  void set_1st_weight(double w1); 
+  <em>// requires: w1 between 0.0 and 1.0</em>
+  { wgt1_ = w1; wgt2_ = 1.0 - w1; }
+
+  <em>// always true: wgt1_ between 0.0 and 1.0</em>
+  <em>// always true: wgt2_ between 0.0 and 1.0</em>
+  <em>// always true: wgt1_ + wgt2_ == 1.0</em>
+};
+</pre>
+
+<p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return).</p>
+
+
+<h2>Specify equivalent expressions</h2>
+
+
+<p>Often library interfaces offer more than one way of doing the same thing. For instance, checking if a container contains at least two elements can be checked in two ways: <code>cont.empty()</code> and <code>cont.size() != 0</code>. The latter is more general and could be used to check for emptiness, but there are occasions where the former can perform faster. This justifies the existence of the two forms. However, the job of matching one function's domain with other function's co-domain would be severely impeded if either specified the contract with a different (albeit equivalent expression. consider:</p>
+
+<pre>template &lt;typename T&gt;
+class vector
+{
+  void resize (size_t s); <em>// ensures: this->size() == s</em>
+  const T&amp; front() const; <em>// requires: !this->empty()</em>
+};
+
+vec.resize(1);
+return vec.front();       <em>// safe?</em>
+</pre>
+
+<p>Can we match what <code>resize</code> guarantees with what <code>front</code> expects? The two expressions are different. It would be much easier if we were able to explicitly declare that for any container expressions <code>cont.empty()</code> and <code>cont.size() != 0</code> are equivalent. This is somewhat similar to class-level assertions, but the declaration applies to more than one class, now we are only interested in the public interfaces, and we can express equivalence between expressions that have side effects. for instance, we can specify that <code>cont.clear()</code> is equivalent to <code>cont.resize(0)</code>.</p>
+
+<h2>Loop variants</h2>
+
+<p>This is somewhat similar to an assertion. It can help convince oneself that a non-trivial loop will ultimately terminate. Sometimes it is not easily seen, because there is no loop counter. We may for instance inspect elements in the collection by skipping some elements, increasing or shrinking, the collection. A loop variant is an expression that evaluates to an integral non-negative number. It is expected that in each loop iteration evaluating this expression renders a number smaller than in the previous iteration. It is also expected that when the value renders zero, the loop terminates.</p>
+
 </body>
 </html>
