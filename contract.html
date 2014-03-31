@@ -2,6 +2,7 @@
 <head></head>
 <body>
 
+
 <h1>What do we need?</h1>
 
 <p>The 'features' we describe here can be collectively called <em>value constraints.</em> We want to use them to put some <em>constraints</em> into the program that cannot be handled by the current C++ type system.</p>
@@ -120,11 +121,90 @@ vec.resize(1);
 return vec.front();       <em>// safe?</em>
 </pre>
 
-<p>Can we match what <code>resize</code> guarantees with what <code>front</code> expects? The two expressions are different. It would be much easier if we were able to explicitly declare that for any container expressions <code>cont.empty()</code> and <code>cont.size() != 0</code> are equivalent. This is somewhat similar to class-level assertions, but the declaration applies to more than one class, now we are only interested in the public interfaces, and we can express equivalence between expressions that have side effects. for instance, we can specify that <code>cont.clear()</code> is equivalent to <code>cont.resize(0)</code>.</p>
+<p>Can we match what <code>resize</code> guarantees with what <code>front</code> expects? The two expressions are different. It would be much easier if we were able to explicitly declare that for any container expressions <code>cont.empty()</code> and <code>cont.size() != 0</code> are equivalent. This is somewhat similar to class-level assertions, but the declaration applies to more than one class, now we are only interested in the public interfaces, and we can express equivalence between expressions that have side effects. for instance, we can specify that <code>cont.clear()</code> is equivalent to <code>cont.resize(0)</code>. Out of all "constraints" described in this section, this is the only one where term "value constraint" is inadequate. This is a constraint on the semantics of expressions.</p>
 
 <h2>Loop variants</h2>
 
 <p>This is somewhat similar to an assertion. It can help convince oneself that a non-trivial loop will ultimately terminate. Sometimes it is not easily seen, because there is no loop counter. We may for instance inspect elements in the collection by skipping some elements, increasing or shrinking, the collection. A loop variant is an expression that evaluates to an integral non-negative number. It is expected that in each loop iteration evaluating this expression renders a number smaller than in the previous iteration. It is also expected that when the value renders zero, the loop terminates.</p>
 
+<p>A framework for supporting value constraints need not address all the above needs. We believe that only supporting the declaration of function domain is a big help in itself. Note that while assertions loop variants need to work with expressions, the features for specifying function domain and co-domain need not necessarily use expressions. We address this in detail in the later sections.</p>
+
+
+
+<h1>What use can be made of value constraints?</h1>
+
+<p>Value constraints exist, even though there is no language support for them in the language. We have seen in the above examples that comments were used to convey the information. In this section we list the benefits obtained form standardizing or formalizing value constraints this way or the other.</p>
+
+<p>In order for an automated tool to understand the constraint, we have to provide a special-purpose syntax. Some tools expect that it is put inside source code comments. For instance [ACSL] uses the following notation: </p>
+<pre><em>/*@ requires x >= 0;
+    ensures \result >= 0; 
+*/</em>
+double sqrt(double x);</pre>
+
+<p>But for structured comments like the above, C++ has an alternative: [[attributes]]. Attributes are akin to comments because they cannot affect the semantics of the program. On the other hand they can be used as hints for optimizations, warnings and any kind of program analysis. If the expectation of value constraints is to affect the program behaviour, attributes will not do, and a special language feature would need to be devised.</p> 
+
+<p>An ideal &mdash; and unrealistic &mdash; support for value constraints is for compiler to check any possible flow in the program and signal a compiler error whenever a breach of the constraint is going to happen. Because this is not doable, the we aim at the support that is not entirely satisfactory, but believed to be better than none.</p>
+
+<h2>Improved documentation</h2>
+
+<p>One of the obvious uses of formalized value constraints is the automated generation of documentation. Even if developers do not use any tool for generating documentation, there is still a gain. When a developer sees the declaration of the function she is going to use, she can immediately see the value constraints along. If they are a language feature, developers are more encouraged to use them (even though comments would do). Since this does not affect program semantics [[attributes]] are sufficient.</p>
+
+<h2>Static analysis</h2>
+
+<p>Value constraints could enable static analysers to detect a potential breach of value constraints and issue warnings. Again, using value constraints this way does not affect program semantics, so [[attributes]] would do.</p>
+
+<h2>Constraint-based compiler optimizations</h2>
+
+<p>In that case, compiler is able to arbitrarily change the behaviour of the program in case where a value constraint has been violated. So, adding a value constraint may change the meaning of the program. In this case attributes will not suffice, and we need a language extension for specifying value constraints.</p>
+
+<h2>Auto-generation of runtime checks</h2>
+
+<p>This is what Eiffel provides and what [N1962] proposes. An implementation can (optionally) inject a code that performs a run-time check if a value constraint is satisfied, and if not a certain action (like calling <code>std::terminate</code> is performed. The insertion of additional logic requires that value constraints are introduced as a language feature. In fact even more language and library features is required to control when and how the run-time checks are performed and responded to.</p>
+
+<hr>
+<h1>Do we need to standardize anything?</h1>
+
+
+
+
+<hr />
+avoid giving up control while in an inconsistent state either by calling out, returning, throwing, task switching, etc.<br>
+mention psychological arguments
+mention structured comments
+<hr />
+
+<p>ACSL: http://frama-c.com/download/acsl_1.4.pdf</p>
+<p>Can a static analyzer do without pre- post- conditions? -- no, we do not know whose fault.</p>
+
+<p>In this paper we want to change a focus from how broken contracts are responded to in run-time, to how contract violations can be detected at compile-time. What is needed in the language to help such static analysis; and what needs to be standardised as opposed to what should be provided by implementations as "quality of implementation".</p>
+
+
+
+<pre>bool is_sorted(iter i, iter j);
+
+void sort(iter i, iter j)
+postcondition{ is_sorted(i, j) };
+
+bool binary_search(iter i, iter j);
+precondition{ is_sorted(i, j) };
+</pre>
+ 
+
+<pre>bool find(iter i, iter j)
+precondition{ is_sorted(i, j) }
+{
+  return binary_search(i, j);
+}
+
+bool find(iter i, iter j)
+precondition{ true }
+{
+  sort(i, j);
+  return binary_search(i, j);
+}
+</pre>
+
+
+http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html
 </body>
 </html>
