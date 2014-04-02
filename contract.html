@@ -102,7 +102,7 @@ public:
 };
 </pre>
 
-<p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return).</p>
+<p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return). Also, in case of thread or context switching, if a function decides to temporarily break such class-scope assertion, it must guard this action with a lock or equivalent, so that other threads do not see an object with a broken contract.</p>
 
 
 <h2>Specify equivalent expressions</h2>
@@ -159,9 +159,68 @@ double sqrt(double x);</pre>
 
 <h2>Auto-generation of runtime checks</h2>
 
-<p>This is what Eiffel provides and what [N1962] proposes. An implementation can (optionally) inject a code that performs a run-time check if a value constraint is satisfied, and if not a certain action (like calling <code>std::terminate</code> is performed. The insertion of additional logic requires that value constraints are introduced as a language feature. In fact even more language and library features is required to control when and how the run-time checks are performed and responded to.</p>
+<p>This is what Eiffel provides and what [N1962] proposes. Value constraints need to be C++ expressions. An implementation can (optionally) inject, at well defined places, a code that evaluates at run-time expressions representing value constraints. If any (boolean) expression evaluates to <code>false</code>, a certain action (like calling <code>std::terminate</code>) is performed. The insertion of additional logic requires that value constraints are introduced as a language feature. In fact even more language and library features is required to control when and how the run-time checks are performed and responded to.</p>
 
-<hr>
+
+<h1>Run-time evaluation of value constraints</h1>
+
+<p>In this section we focus on one possible approach: treating value constraints as expressions and evaluating them at run-time.</p>
+
+<h2>Side effects of the expressions</h2>
+
+<p>Using expressions with side effects in value constraints is generally discouraged, but sometimes it might be difficult to spot that we have a side effect. For the purpose of this discussion we also consider run-time overhead, and especially the run-time complexity as a side effect. To minimize the possibility of invoking a function with a side effect [N1962] proposes that only <code>const</code>-qualified member functions are allowed; but even these can modify non-member variables, and it is not only member functions that may need to be used to express value constraints. Ideally, we would like to use only <em>pure</em> (referentially transparent) expressions, but C++ as of today does not offer the possibility of detecting if an expression is pure. Although the definition of relaxed <code>constexpr</code> functions makes a step towards pure functions.</p>
+
+<p>A practical question to be answered, given the syntax from [N1962], is if the following to be a legal code for detecting if run-time value constraint checks are enabled?</p>
+
+<pre>
+int preconditions_on = false;
+void test() precondition{ preconditions_on = true; }
+{
+  cout &lt;&lt; "preconditions are on: " &lt;&lt; preconditions_on;
+}
+</pre>
+
+<p>And similarly, is the following a reliable way of checking if a number is negative?</p>
+
+<pre>double sqrt(double x) precondition { x >= 0.0; };
+
+double is_negative(double x)
+{
+  set_precondition_broken_handler(&amp;throw_exception);
+  try { sqrt(x) };
+  catch (exception const&amp;) { return true; }
+  return false;
+}
+</pre>
+
+<h2>Value constraints in overloaded functions</h2>
+
+<p>Consider the following declaration:</p>
+
+<pre>
+template &lt;typename IIT&gt; <em>// requires: InputIterator&lt;IIT&gt;</em>
+void displayFirstSecondNext(IIT beg, IIT end);
+<em>// requires: std::distance(beg, end) &gt;=2</em>
+</pre>
+
+<p>Is function template <code>std::distance</code> referentially transparent? The answer is: it is not templates that can or cannot be pure but functions. Some functions instantiated from this template will be pure, others will not &mdash; it depends what iterator type the template will be instantiated with. Consider <code>InputIterator</code>. In the worst case (of <code>std::istream_iterator</code>) incrementing the iterator invalidates other iterators referring to the same stream. This is a tricky behaviour: by changing our internal copies of objects (iterators), we alter (invalidate) other, external objects. Function <code>std::distance</code> does increment iterators. If our precondition was to be evaluated, this might cause a UB in the program.</p>
+
+<p>Thus, we have an expression; it is pure and natural to use for some instantiations, and has severe side effects for other instantiations. If we want it to be evaluated only in certain instantiations, another feature needs to be provided. For instance, we will need to specialize a template only to be able to specify a different precondition, or add an annotation that this precondition should not be evaluated if certain compile-time predicate evaluates to <code>true</code>. clearly, on global switch (similar to <code>NDEBUG</code>) saying "disable/enable all value constraint evaluations" will not be enough.</p>
+
+<h2>Inadvertent increase in run-time complexity</h2>
+<p>There are other reasons for having a more fine grained control of which checks should be enabled. Consider a binary search algorithm. Its runtime complexity is O(log <var>n</var>). It has an obvious precondition that the range we search through is sorted. Performing the sorted check has complexity O(<var>n</var>). Thus by evaluating the precondition, we change the algorithms complexity. This might be unacceptable, even for some debug/testing builds. Runtime complexity is a sort of side effect of an algorithm, and it can be silently added to the function, especially when following a good practise a developer adds an obvious precondition, which would be his primary task, and forgets the secondary task of specifying (using some contract-specific sub-language) the conditions under which this precondition shall be evaluated.</p>
+
+<h2>Run-time response to a broken contract</h2>
+
+<p>[N1962] proposes that the action taken upon violating a value constraint should be configurable by the programmer. While we agree this should be configurable, we object to the way of achieving this by <code>std::set_terminate</code>-like registering function. <code>std::set_terminate</code> can be called multiple times from multiple places: different, possibly dynamically-loaded/shared libraries. This makes sense for <code>std::terminate</code>. Every part of the system may acquire a <em>critical</em> resource: one that has to be released even if "exception handling must be abandoned for less subtle error handling techniques". In that case the component also needs to register an additional clean-up function. In case of broken contract situation, we do not need or want that. We believe only the person that assembles the final program from the components and libraries, should be empowered to to decide how broken contracts are handled. Only him does have the knowledge if this is a test or a retail build; if the slow-down of some run-time checks can be afforded. Libraries do not know that: they do not know in what environment they will be used.</p>
+
+<p>Additionally, the <code>std::set_terminate</code> mechanism has a certain flow. Unless you apply some syntactic contortions, you cannot set the handler for functions executed before <code>main()</code>.</p>
+
+<p>We are not aware of any mechanism currently available in C++ that would facilitate our needs. But since function <code>main</code> has the property of being required to be defined only once across the executable program, a solution we are leaning towards is to apply some special annotation around function <code>main</code> that would indicate what the user's preference is on the handling of broken contracts.</p>
+
+
+<hr />
+
 <h1>Do we need to standardize anything?</h1>
 
 
