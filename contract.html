@@ -35,7 +35,9 @@ could be defined as follows:</p>
 }
 </pre>
 
-<p>What it effectively does is that such functions do not restrict their domain. They are well defined for every value of an input type, and do other things than only "proper algorithms". This means that our function can be used for detecting negative numbers:
+<p>What it effectively does is to change the function's domain. Now the functions do not restrict its domain anymore.
+It is well defined for every value of an input type, and does other things than only the "proper algorithm". 
+This has an unintended consequence: our function can be used for detecting negative numbers:
 </p>
 
 <pre>double is_negative(double x)
@@ -44,7 +46,9 @@ could be defined as follows:</p>
 }
 </pre>
 
-<p>Another way of approaching the function domain problem is to informally 'announce' that the function is not defined for certain values of input types and implement it with the assumption that the undesired values are never passed to the function:</p>
+<p>Another way of approaching the function domain problem is to informally 'announce' that the function is not
+defined for certain values of input types and implement it with the assumption that the undesired values
+are never passed to the function:</p>
 
 <pre>
 double sqrt(double x)
