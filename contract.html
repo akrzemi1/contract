@@ -127,7 +127,7 @@ public:
 <h2>Specify equivalent expressions</h2>
 
 
-<p>Often library interfaces offer more than one way of doing the same thing. For instance, checking if a container contains at least one element can be checked in two ways: <code>cont.empty()</code> and <code>cont.size() != 0</code>. The latter is more general and could be used to check for emptiness, but there are occasions where the former can perform faster. This justifies the existence of the two forms. However, the job of matching one function's domain with other function's co-domain would be severely impeded if either specified the contract with a different (albeit equivalent expression. consider:</p>
+<p>Often library interfaces offer more than one way of doing the same thing. For instance, checking if a container contains at least one element can be checked in two ways: <code>cont.empty()</code> and <code>cont.size() != 0</code>. The latter is more general and could be used to check for emptiness, but there are occasions where the former can perform faster. This justifies the existence of the two forms. However, the job of matching one function's domain with other function's co-domain would be severely impeded if either specified the contract with a different (albeit equivalent) expression. consider:</p>
 
 <pre>template &lt;typename T&gt;
 class vector
