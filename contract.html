@@ -5,9 +5,23 @@
 
 <h1>What do we need?</h1>
 
-<p>The 'features' we describe here can be collectively called <em>value constraints.</em> We want to use them to put some <em>constraints</em> into the program that cannot be handled by the current C++ type system.</p>
+<p>
+The 'features' we describe here can be collectively called <em>value constraints.</em>
+We want to use them to express in the language that certain combinations of values of certain objects 
+at certain times are invalid and are intended (and expected) never to occur.</p>
+
+
 <h2>Specify function's domain</h2>
-<p>The problem goes back to mathematics. Certain functions are well defined only for a subset of values of the input type. for instance a square root over real numbers is not defined for negative numbers. What does it mean for a function in a programming language like C++ that it is not defined? Currently there are two approaches. One is to detect the value of the parameter(s) that the function should not be prepared for and execute a different logic: returning a special value, throwing an exception, etc. Using our example with a square root, a corresponding function <code>sqrt()</code> could be defined as follows:</p>
+
+<p>The problem goes back to mathematics. Certain functions are well defined
+only for a subset of values of the input type. for instance a square root
+over real numbers is not defined for negative numbers. 
+What does it mean for a function in a programming language like C++ 
+that it is not defined? Currently there are two approaches. One is to detect 
+the value of the parameter(s) that the function should not be prepared for 
+and execute a different logic: returning a special value, throwing an exception, etc. 
+Using our example with a square root, a corresponding function <code>sqrt()</code>
+could be defined as follows:</p>
 
 <pre>double sqrt(double x)
 {
