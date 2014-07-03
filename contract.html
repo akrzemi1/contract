@@ -238,6 +238,93 @@ void displayFirstSecondNext(IIT beg, IIT end);
 <p>We are not aware of any mechanism currently available in C++ that would facilitate our needs. But since function <code>main</code> has the property of being required to be defined only once across the executable program, a solution we are leaning towards is to apply some special annotation around function <code>main</code> that would indicate what the user's preference is on the handling of broken contracts.</p>
 
 
+<h1>Assisting static analysis</h1>
+
+<p>Automated tools already perform static analysis, even without any support from the programmer. However, additional hints from developers could enable even further analysis, or enable vendors to provide analysis in compilers without at lower cost. In the example like the following, a compiler can fairly easily detect that a potential UB is at hand:</p>
+
+<pre>int* produce()
+{
+  if (cond) return &amp;global;
+  else      return nullptr;
+}
+
+void consume(int* p)
+{
+  use(*p);
+}
+
+consume(produce());
+</pre>
+
+<p>But even here, certain problems occur. What if the two functions are compiled separately; e.g., if <code>produce</code> is part of a separate third party library? Even if compiler performs a per-file analysis, it may not have sufficient resources (RAM) to perform a global link-time analysis. Even if the analysis is successful and detects a potential UB, it doesn't tell us who of the three: author of <code>produce</code>, author of <code>consume</code> or the guy who assembles them, is responsible for the situation and should fix the problem. This is somewhat similar to the situation we face today with template instantiation error messages. Compiler sees that there is a syntax/type error, it can give you the entire context, but it cannot tell at which level of instantiation process the source of the problem lays.</p>
+
+<p>Also, as shown in the example with <code>sqrt</code> it is sometimes not possible to tell from only observing the reads from a variable what the function's requirement is. In the case of <code>sqrt</code> it is not the UB that we want to avoid but an infinite recursion.</p>
+
+<p>Another reason where assisting the static analysis may prove useful is when there is more than one way to express a given condition. Consider the following code:</p>
+
+<pre>
+class Vector
+{
+  const T&amp; front() const; <em>// requires: !this->empty()</em>
+  <em>// ...</em>
+};
+
+void test(Vector &amp; vec)
+{
+  if (vec.size() != 0)
+    use(vec.front();
+}
+</pre>
+
+<p>You know that <code>vec.size() != 0</code> and <code>!vec.empty()</code> mean the same thing, but compiler may not, especially if it cannot look inside the definitions of member functions (because they are compiled separately).</p>
+
+<h2>How long does a condition hold?</h2>
+
+<p>We illustrate the issue in question with the following two examples.</p>
+
+<pre>
+Iter test(Iter b, Iter e, Value_type&lt;Iter&gt; v)
+{
+  std::sort(b, e);
+  fun();
+  std::binary_search(b, e, v); // requires: is_sorted(b, e)
+}
+</pre>
+
+<p>Assuming that a static analyser can somehow figure out that <code>sort</code> leaves elements in the state that satisfies the condition <code>is_sorted</code>, can it be sure that the condition still holds when <code>fun</code> is finished? After all <code>fun</code> could be manipulating iterators that alias <code>b</code> and <code>e</code>. Apparently, static analysis cannot give us a 100% bug-free guarantee. It is only helps detect undoubtful bugs.</p>
+
+<p>Second, it is obvious that a certain condition does not last forever. How is the analyser supposed to know when a given condition ceases to hold? One easy answer would be to say that when a non-<code>const</code> operation is called on the object all conditions it might  have satisfied are now considered not satisfied. But this would break even simple use cases:</p>
+
+<pre>void test(std::vector&lt;int&gt; &amp; vec)
+auto b = vec.begin(); <em>// non-const: invalidates all conditions</em>
+auto e = vec.end();   <em>// non-const: invalidates all conditions</em>
+std::sort(b, e);      <em>// requires: valid_range(b, e)</em>
+</pre>
+
+<p>Even if the analyser knows that <code>vec.begin()</code> and <code>vec.end()</code> form a valid range, they are a non-<code>const</code> operations and invalidate any assumptions about their value/state. Any language feature for assisting static analysis must provide a way of specifying which operations invalidate which conditions.</p>
+
+<br>======================================<br>
+
+preconditions work only for value semantic use cases (passing by value)
+
+<h1>Constraining STL</h1>
+
+<p>As a usefulness test, any proposed value constraint framework should be checked if it is able to express value constraints in STL. We consider some selected examples.</p> 
+
+<h2>Case 1: a valid range</h2>
+<p>This is probably the most difficult one to handle. Nearly any algorithm on STL ranges requires that <code>end</code> is reachable from <code>begin</code>. It cannot be validated by executing any expression. This is why it is required as a precondition: the caller may have better means of ensuring that this requirement is satisfied. For instance, it is obvious that <code>c.begin()</code> and <code>c.end()</code> called on any STL container form a valid range. Is a value constraints framework capable of expressing that the values of <code>c.begin()</code> and <code>c.end()</code> satisfy the requirements of, say, <code>std::for_each</code>?</p>
+
+<h2>Case 2: sub-ranges</h2>
+Similarly, in the call <code>m = std::find_if(b, e, p)</code>, assuming that <code>b</code> and <code>e</code> form a valid range, can it be verified or even expressed that <code>b</code> and <code>m</code> as well as <code>m</code> and <code>e</code> form valid ranges and that these combinations should satisfy the requirement of subsequent STL algorithms about valid ranges?
+
+
+<h2>Case 3: sorting</h2>
+
+
+
+
+
+
 <hr />
 
 <h1>Do we need to standardize anything?</h1>
