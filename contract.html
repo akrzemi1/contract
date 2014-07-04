@@ -123,6 +123,7 @@ public:
 
 <p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return). Also, in case of thread or context switching, if a function decides to temporarily break such class-scope assertion, it must guard this action with a lock or equivalent, so that other threads do not see an object with a broken contract.</p>
 
+<p>Class-level assertions (or class invariants) could be use as a criterion for good abstractions, much like axioms in concepts. If you cannot specify an invariant, it might be an indication that the design/abstraction may be poor or this should not have been made a class.</p>
 
 <h2>Specify equivalent expressions</h2>
 
@@ -348,8 +349,6 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 
 <p>We do not propose to add such properties to the language. We just want to show a different perspective on value constraints. N1962 also offers this perspective, but we fear that the focus on broken contract handlers and the order of evaluation of different value constraints, might have obfuscated this idea. A similar effect (as having properties) could be achieved by annotating some value constraints (which use normal expressions) that they must never be evaluated. </p>
 
-<hr>
-
 
 <h1>Interactions with other C++ features</h1>
 
@@ -368,12 +367,84 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 
 <p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused a UB later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
 
+
 <h2><code>constexpr</code> functions and literal types</h2>
 
 <p><code>constexpr</code> functions can be evaluated at run-time or at compile-time. Ideally, a compile-time evaluation of such function should result in compile-time error when its precondition or postcondition is broken. This is possible if expressions in preconditions and postconditions are core constant expressions. It appears reasonable to require that <code>constexpr</code> functions have only <code>constexpr</code> value constraints.</p>
 
-<p>A similar question needs to be answered for literal types and invariants. For literal types it is required that they have at least one non-copy/move <code>constexpr</code> constructor. This constructor can be used to create a compile-time constant, whose invariant is expected to hold. This may require that the invariant should also be <code>constexpr</code>, as otherwise it is impossible to verify it at compile time. More, some constructors are <code>constexpr</code> even for non-literal classes: their purpose is to guarantee the static initialization of global objects. It is not clear if this should affect the <code>constexpr</code> requirement on the class invariant.</p>
+<p>A similar question needs to be answered for literal types and invariants. For literal types it is required that they have at least one non-copy/move <code>constexpr</code> constructor. This constructor can be used to create a compile-time constant, whose invariant is expected to hold. This may require that the invariant should also be <code>constexpr</code>, as otherwise it is impossible to verify it at compile time. On the other hand, the interface of user-defined literal types can be divided into compile-time (<code>constexpr</code>) and run-time part. The effects of the other one may alter other parts of the program state that may only be invariant-verified with run-time expressions. More, some constructors are <code>constexpr</code> even for non-literal classes: their purpose is to guarantee the static initialization of global objects. It is not clear if this should affect the <code>constexpr</code> requirement on the class invariant.</p>
 
+<h2>When should invariant hold?</h2>
+
+<p>When is class invariant supposed to hold? Objects are manipulated via class's public interface. Public functions often need to compromise the invariant, but they always put the invariant back when they finish -- even via an exception. This means that as long as no function from the object's public interface is being invoked on it, or any of its subobjects manipulated, the object's invariant should hold.</p> 
+
+<p>This is different from the common notion that invariants should hold before entering any public function or destructor and after leaving any public member function or constructor. For instance, inside a public function you can invoke other public functions and around these nested calls you do not expect the invariant to hold.</p>
+
+
+<h2>Composing invariants</h2>
+
+<p>Given some class <code>D</code>, apart from its "direct" invariant, we expect that invariants of <code>D</code>'s bases classes and <code>D</code>'s data members also hold. This can be implicit, you do not have to make recursive definitions yourself, similarly like you do not have to specify in the destructor which subobject's destructors need to be called. But this does not cover all cases. Consider class <code>optional</code> (similar to Boost.Optional), it can be implemented as follows:
+
+<pre>
+template &lt;typename T&gt;
+class optional
+{
+  bool is_initiailzed_ = false;
+  std::aligned_storage_t&lt;sizeof(t), alignof(T)&gt; storage_;
+  T* storage() { return *static_cast&lt;T*&gt;(&amp;storage_); }
+public:
+  explicit operator bool() const { return is_initialized_; }
+  T&amp; operator*() { 
+    assert (is_initiailzed_);
+    return *storage(); 
+  }
+  optional(const T&amp; v) {
+    new (storage()) T(v); 
+    is_initiailzed_ = true;
+   }
+  ~optional() { 
+    if (is_initiailzed_)
+      storage()-&gt;T::~T();
+  } 
+};  
+</pre>
+
+<p>
+Obviously, we store (sometimes) an object of type <code>T</code> inside, but it is neither a base class nor a member sub-object. Yet, if it is there (if optional object contains a value), we want its invariant to hold, and compiler may not be able to deduce it. We might need to express a "conditional" invariant:</p>
+
+
+<pre>// invariant: !is_initialized_ || invariant(*storage());</pre>
+
+<p>Similarly, a vector of <code>T</code>s (<code>std::vector&lt;T&gt;</code>) can be thought of as being composed of the <code>T</code>s it contains. This is reflected in how its equality comparison is defined and how const-ness is propagated. A value of the container is composed of the values of its elements. In a similar manner, we would like to be able to express invariants on composed types, i.e., the vector's invariant holds iff some vector-specific conditions are satisfied and all vector elements' invariants hold. We are not quite sure, if this needs to be specified explicitly, or is it not enough for the machine to observe that if there is some nested T accessible from the vector, its invariant must hold. But will the machine know that the result of <code>vec.back()</code> should have its invariant hold? after all, calling <code>back()</code> is not always allowed, and may render a UB.</p>
+
+<p>Another open question is if we should check invariants of member subobjects if they are references (and therefore do not pertain to the master object’s value).</p>
+
+<h2>Function's public interface</h2>
+
+<p>For the purpose of specifying the semantics of value constrains, we may need to redefine the concept of class's public interface. Consider the following definition:</p>
+
+<pre>class Account
+{
+public:
+  void modify(Param p);
+  friend void swap(Account&amp; a1, Account&amp; a2);
+private:
+  // ...
+};
+</pre>
+
+<p>Function <code>swap</code>, although it is not a public member function, clearly is part of <code>Account</code>'s public interface. I.e., we allow that it temporarily breaks the invariant of objects <code>a1</code> and <code>a2</code>. The technique with defining operator-like free functions as friends is not just a trick. In fact it is sometimes recommended for operators like <code>operator==</code> when the two arguments are to be treated symmetrically.</p>
+
+<h2>Protected members</h2>
+
+<p>Can protected member functions be called in pre- and post-conditions? In public functions, this makes no sense: the user of the class may not have access to protected functions; and it is expected that the user in order to verify if a precondition holds should be able to evaluate the condition herself.</p>
+
+<p>On the other hand, protected functions may also need to specify their preconditions as they constitute an interface for deriving classes (which can also be considered users), and for them calling other protected members appears reasonable.</p>
+
+<p>Similarly, it is possible that class's protected interface may assume an invariant that is narrower than the class's public interface's invariant. Protected members may require less of the program state than the public members, but they still may require something. Not suer if this use case is worth complicating the language.</p>
+
+
+<hr>
 <br>======================================<br>
 
 <h2>Side effects in value constraints</h2>
