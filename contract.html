@@ -240,7 +240,7 @@ void displayFirstSecondNext(IIT beg, IIT end);
 
 <h1>Assisting static analysis</h1>
 
-<p>Automated tools already perform static analysis, even without any support from the programmer. However, additional hints from developers could enable even further analysis, or enable vendors to provide analysis in compilers without at lower cost. In the example like the following, a compiler can fairly easily detect that a potential UB is at hand:</p>
+<p>Automated tools already perform static analysis, even without any support from the programmer. However, additional hints from developers could enable even further analysis, or enable vendors to add analysis in compilers at lower expense. In the example like the following, a compiler can fairly easily detect that a potential UB is at hand:</p>
 
 <pre>int* produce()
 {
@@ -272,7 +272,7 @@ class Vector
 void test(Vector &amp; vec)
 {
   if (vec.size() != 0)
-    use(vec.front();
+    use(vec.front());
 }
 </pre>
 
@@ -291,7 +291,7 @@ Iter test(Iter b, Iter e, Value_type&lt;Iter&gt; v)
 }
 </pre>
 
-<p>Assuming that a static analyser can somehow figure out that <code>sort</code> leaves elements in the state that satisfies the condition <code>is_sorted</code>, can it be sure that the condition still holds when <code>fun</code> is finished? After all <code>fun</code> could be manipulating iterators that alias <code>b</code> and <code>e</code>. Apparently, static analysis cannot give us a 100% bug-free guarantee. It is only helps detect undoubtful bugs.</p>
+<p>Assuming that a static analyser can somehow figure out that <code>sort</code> leaves elements in the state that satisfies the condition <code>is_sorted</code>, can it be sure that the condition still holds when <code>fun</code> is finished? After all <code>fun</code> could be manipulating iterators that alias <code>b</code> and <code>e</code>. Apparently, static analysis cannot give us a 100% bug-free guarantee. It can only helps detect certain bugs.</p>
 
 <p>Second, it is obvious that a certain condition does not last forever. How is the analyser supposed to know when a given condition ceases to hold? One easy answer would be to say that when a non-<code>const</code> operation is called on the object all conditions it might  have satisfied are now considered not satisfied. But this would break even simple use cases:</p>
 
@@ -301,12 +301,93 @@ auto e = vec.end();   <em>// non-const: invalidates all conditions</em>
 std::sort(b, e);      <em>// requires: valid_range(b, e)</em>
 </pre>
 
-<p>Even if the analyser knows that <code>vec.begin()</code> and <code>vec.end()</code> form a valid range, they are a non-<code>const</code> operations and invalidate any assumptions about their value/state. Any language feature for assisting static analysis must provide a way of specifying which operations invalidate which conditions.</p>
+<p>Even if the analyser knows that <code>vec.begin()</code> and <code>vec.end()</code> form a valid range, they are a non-<code>const</code> operations and invalidate any assumptions about their value/state. Any language feature for assisting static analysis must provide a way of specifying which operations invalidate which conditions. But this is likely to make the specifications very complicated, and discourage everybody from using the feature.</p>
+
+
+<h1>"Properties": a hypothetical language feature</h1>
+
+<p>In this section we describe a language feature that would enable defining value constraints in a somewhat different way than the "imperative" approach described in [N1962]. We call it <em>properties</em>, which have been described in [N3351]. A property is a new kind of "entity" in the language: it is neither an object, nor a function, it is just something else. It is introduced by an invented keyword "<code>property</code>":</p>
+
+<pre>template &lt;typename T&gt;
+property bool is_non_empty (std::vector&lt;T&gt;);
+</pre>
+
+<p>A property is something that an object, or a group of objects can acquire at a certain point in time, and then loose at a different point in time. There is no function-body associated with the property: it only has a name. A property can be used in specifying pre- and postconditions:</p>
+
+<pre>
+template &lt;typename T&gt;
+class vector
+{
+  void push_back (T const&amp;); // post: is_non_empty(*this);
+  const T&amp; back() const; // pre: is_non_empty(*this);
+};
+
+vector&lt;int&gt; v;  // doesn't have property is_non_empty yet.
+v.push_back(1); // acquires property is_non_empty
+int i = back(); // required property is present
+v.pop_back();   // looses property is_non_empty
+</pre>
+
+<p>How do we know when a property is lost? In the most simple case we could say that every mutating (non-const) function called upon our object discards all its properties. But this would imply that in our case even calling <code>back()</code> discards the property, so a more complex way of specifying how the properties are preserved may be required.</p>
+
+<p>So, what do we buy using properties rather than considering any boolean expression such a property? First, properties are pure: they have no side effects. Second, we can express value constraints that are not expressible with expressions:</p>
+
+<pre>
+template &lt;typename Iter&gt;
+property bool valid_range(Iter begin, Iter end);
+
+template &lt;typename T&gt;
+class vector
+{
+  // invariant: valid_range(this-&gt;begin(), this-&gt;end());
+};
+
+template &lt;typename Iter&gt;
+void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;end());
+</pre>
+
+<p>We do not propose to add such properties to the language. We just want to show a different perspective on value constraints. N1962 also offers this perspective, but we fear that the focus on broken contract handlers and the order of evaluation of different value constraints, might have obfuscated this idea. A similar effect (as having properties) could be achieved by annotating some value constraints (which use normal expressions) that they must never be evaluated. </p>
+
+<hr>
+
+
+<h1>Interactions with other C++ features</h1>
+
+<h2>When should precondition hold?</h2>
+
+<p>A common answer to this question is "after function parameters have been initialized, before its first instruction is executed." While it looks good in typical simple examples, consider the following case:</p>
+
+<pre>void fun(Tool * const tool, int const i)
+// requires: tool != nullptr
+// requires: tool-&gt;value() &gt;= 0;
+{
+  line_1: int j = transform(i); 
+  line_2: int k = process(tool-&gt;value());
+}
+</pre>
+
+<p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused a UB later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
+
+<h2><code>constexpr</code> functions and literal types</h2>
+
+<p><code>constexpr</code> functions can be evaluated at run-time or at compile-time. Ideally, a compile-time evaluation of such function should result in compile-time error when its precondition or postcondition is broken. This is possible if expressions in preconditions and postconditions are core constant expressions. It appears reasonable to require that <code>constexpr</code> functions have only <code>constexpr</code> value constraints.</p>
+
+<p>A similar question needs to be answered for literal types and invariants. For literal types it is required that they have at least one non-copy/move <code>constexpr</code> constructor. This constructor can be used to create a compile-time constant, whose invariant is expected to hold. This may require that the invariant should also be <code>constexpr</code>, as otherwise it is impossible to verify it at compile time. More, some constructors are <code>constexpr</code> even for non-literal classes: their purpose is to guarantee the static initialization of global objects. It is not clear if this should affect the <code>constexpr</code> requirement on the class invariant.</p>
 
 <br>======================================<br>
 
+<h2>Side effects in value constraints</h2>
+
+<p>Value constraints are defined in terms of predicates: functions returning type <code>bool</code>. A notable difference between predicates in the mathematical sense and in an imperative programming language like C++ is that the latter kind of predicates can have side effects. Enforcing the requirement that only const member functions can be invoked does not address the problem of side effects. If we consider the possibility of evaluating these predicates, we have to address the consequences of evaluating these side effects.</p>
+
+<p>One possible approach is to say that it is unspecified whether and which value constraints are evaluated. Additional attributes may to some extent control when we evaluate the predicates. But we guarantee that we do not execute the predicates more than once.</p>
+
 preconditions work only for value semantic use cases (passing by value)
 
+
+<br>
+
+?? Should evaluating the condition be atomic with function evaluation??
 <h1>Constraining STL</h1>
 
 <p>As a usefulness test, any proposed value constraint framework should be checked if it is able to express value constraints in STL. We consider some selected examples.</p> 
