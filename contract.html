@@ -11,6 +11,10 @@
 
 <p>In this paper we want to analyse how a support for contract programming-like features could be supported in C++. We use a different term "value semantics" to stress that we do not necessarily want to copy solutions that other imperative programming languages adapt. we want to change a focus from how broken contracts are responded to in run-time, to how contract violations can be detected at compile-time. This is a high-level overview of the problem, and we are not even covering the things like sub-contracting or other interactions with OO features.</p>
 
+<h1>Comparison with other contract-programming proposals</h1>
+
+<p>All contract programming proposals that we are aware of &mdash; <a name="N1962">[N1962]</a>, <a name="N4075">[N4075]</a>, <a name="N4110">[N4110]</a> &mdash; start from the assumption that the support for preconditions must be provided in from of evaluating a precondition before function calls, disabling this evaluations and installing broken contract handlers. In this paper, we do not take this assumption for granted (as it always incurs some run-time cost) and explore an alternative approach, focusing on static analysis. Run-time support is only a subset of the scope of our analysis.</p>
+
 <h1>What do we need?</h1>
 
 <p>
@@ -543,6 +547,8 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <p>This calls for the following semantics. If a piece of code that "relies" on a value constraint is executed, and its corresponding value constraint would return false <em>if it were evaluated</em> (but no evaluation is required), the behaviour of the program is undefined. Any value constraint "in its proper moment" may be evaluated once or not evaluated -- it is <em>unspecified</em>. </p>
 
+<p>One thing that appears non-controversial is that declarations of preconditions and postconditions need to be part of function declaration, so that they are accessible by the function users who may not have access to function definitions. We leave it open whether a value constraint declaration should affect function's signature or type or affect the overload resolution mechanism. </p>
+
 
 <h2>Run-time response</h2>
 
@@ -556,13 +562,17 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <p>Gabriel Dos Reis suggested the "STL test" for a precondition framework.</p>
 
+<p>Jo&euml;l Lamotte offered a number of useful suggestions that improved the quality of the paper.</p>
+
 <h1>References</h1>
 
 <ul>
 <li><a name="ACSL">[ACSL]</a> Patrick Baudin, Pascal Cuoq, Jean-Christophe Filli&acirc;tre, Claude March&eacute;, Benjamin Monate, Yannick Moy, Virgile Prevosto, "ACSL: ANSI/ISO C Specification Language" (<a href="http://frama-c.com/download/acsl_1.4.pdf">http://frama-c.com/download/acsl_1.4.pdf</a>),</li>
 <li><a name="N1962">[N1962]</a> Lawrence Crowl, Thorsten Ottosen, "Proposal to add Contract Programming to C++ (revision 4)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html</a>),</li>
 <li><a name="N2887">[N2887]</a> Gabriel Dos Reis, Bjarne Stroustrup, Alisdair Meredith, "Axioms: Semantics Aspects of C++ Concepts" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2887.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2887.pdf</a>),</li>
-<li><a name="N3351">[N3351]</a> Bjarne Stroustrup, Andrew Sutton et al., "A Concept Design for the STL" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf</a>).</li>
+<li><a name="N3351">[N3351]</a> Bjarne Stroustrup, Andrew Sutton et al., "A Concept Design for the STL" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf</a>),</li>
+<li><a name="N4075">[N4075]</a> John Lakos, Alexei Zakharov, Alexander Beels, "Centralized Defensive-Programming Support for Narrow Contracts (Revision 6)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf</a>),</li>
+<li><a name="N4110">[N4110]</a> J. Daniel Garcia, "Exploring the design space of contract specifications for C++" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf</a>).</li>
 
 </ul>
 
