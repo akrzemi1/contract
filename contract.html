@@ -9,11 +9,13 @@
 <h1>Value constraints</h1>
 
 
-<p>In this paper we want to analyse how a support for contract programming-like features could be supported in C++. We use a different term "value semantics" to stress that we do not necessarily want to copy solutions that other imperative programming languages adapt. we want to change a focus from how broken contracts are responded to in run-time, to how contract violations can be detected at compile-time. This is a high-level overview of the problem, and we are not even covering the things like sub-contracting or other interactions with OO features.</p>
+<p>In this paper we want to analyse how a support for contract programming-like features could be supported in C++. We use a different term "value constraints" to stress that we do not necessarily want to copy solutions that other imperative programming languages adapt. We want to change the focus from how broken contracts are responded to in run-time, to how contract violations can be detected at compile-time. This is a high-level overview of the problem, and we are not even covering the things like sub-contracting or other interactions with OO features.</p>
 
 <h1>Comparison with other contract-programming proposals</h1>
 
-<p>All contract programming proposals that we are aware of &mdash; <a href="#N1962">[N1962]</a>, <a href="#N4075">[N4075]</a>, <a href="#N4110">[N4110]</a> &mdash; start from the assumption that the support for preconditions must be provided in from of evaluating a precondition before function calls, disabling this evaluations and installing broken contract handlers. In this paper, we do not take this assumption for granted (as it always incurs some run-time cost) and explore an alternative approach, focusing on static analysis. Run-time support is only a subset of the scope of our analysis.</p>
+<p>While <a href="#N1962">[N1962]</a> is a fairly complete proposal for adding contract-programming support to C++, this document offers an analysis of the problem domain rather than making a specific proposal. We focus on identifying expectations, potential implementation difficulties and costs.</p>
+
+<p>All other contract programming proposals that we are aware of &mdash; <a href="#N4075">[N4075]</a>, <a href="#N4110">[N4110]</a> &mdash; start from the assumption that the support for preconditions must be provided in the from of evaluating preconditions before function calls, occasionally disabling these precondition evaluations, and installing broken contract handlers. In this paper, we do not take this assumption for granted. Run-time support is only a subset of the scope of our analysis. We explore in more detail an alternative approach: the focus on static analysis (also indicated in <a href="#N1962">[N1962]</a>).</p>
 
 <h1>What do we need?</h1>
 
@@ -26,8 +28,8 @@ at certain times are invalid and are intended (and expected) never to occur.</p>
 <h2>Specify function's domain</h2>
 
 <p>The problem goes back to mathematics. Certain functions are well defined
-only for a subset of values of the input type. for instance a square root
-over real numbers is not defined for negative numbers. 
+only for a subset of values of the input type. For instance, a square root
+returning real numbers is not defined for negative numbers. 
 What does it mean for a function in a programming language like C++ 
 that it is not defined? Currently there are two approaches. One is to detect 
 the value of the parameter(s) that the function should not be prepared for 
@@ -80,7 +82,7 @@ double sqrt(double x)
 }
 </pre>
 
-<p>This uses Newton's Iteration algorithm. The loop will terminate when values <code>y</code> and <code>prev_y</code> become close enough. They will only do that when <code>x</code> is non-negative. Supplying a negative value will make the loop run forever and hang the program. Even a clever analyser is unlikely to detect from the function body that passing a negative input to this function is something wrong. But everything is fine as long as no negative number is passed in. 'Announcing' that the function is not prepared for just any input is informal: it is either written in the comment, or in paper or html documentation, or only spread by word, or assumed to be obvious. This risks an unintended negative program behaviour, like a halt, or a UB. However, it is often preferred because of performance and inability to come up with a reasonable fall-back action. Consider <code>std::vector::operator[]</code>, it does not check the bounds for performance reasons. If it was used in the following code:</p>
+<p>This uses Newton's Iteration algorithm. The loop will terminate when values <code>y</code> and <code>prev_y</code> become close enough. They will only do that when <code>x</code> is non-negative. Supplying a negative value will make the loop run forever and hang the program. Even a clever analyser is unlikely to detect from the function body that passing a negative input to this function is something wrong. But everything is fine as long as no negative number is passed in. 'Announcing' that the function is not prepared for just any input is informal: it is either written in the comment, or in paper or html documentation, or only spread by word, or assumed to be obvious. This risks an unintended negative program behaviour, like a halt, or an undefined behaviour. However, it is often preferred because of performance and inability to come up with a reasonable fall-back action. Consider <code>std::vector::operator[]</code>, it does not check the bounds for performance reasons. If it was used in the following code:</p>
 
 <pre>
 for (int i = 0; i != vec.size(); ++i) {
@@ -97,11 +99,11 @@ for (int i = 0; i != vec.size(); ++i) {
 
 <p>The caller can be sure that no negative value is passed to function <code>sqrt()</code> even though no check is performed at all. Function domain defined this way is a <em>contract</em> between function author and function callers. The author defines the domain and assumes he will not get values from outside the domain. The caller guarantees that she will not pass values outside the domain. Out of all contracts described here, this one is the most likely to be broken, because it is the only one where the person responsible for guaranteeing is different than the person declaring the contract. The user may not be aware that a function has requirements on the values of parameters, or may misunderstand what the requirement is. Therefore this contract requires the most serious attention and support in the language.</p>
 
-<p>What we need is the ability to declare the function's domain along with the function, so that it is visible to the callers and to the automated tools. How the tools can handle this is a secondary issue, but the behaviour can be: (1) automated documentation generation, (2) additional warnings from static analysers, (3) additional instrumentation injected by compilers, (4) compiler optimizations based on domain declarations.</p>
+<p>What we need is the ability to declare the function's domain along with the function, so that it is visible to the callers and to the automated tools. How the tools can handle this is a secondary issue, but the behaviour can be: (1) automated documentation generation, (2) additional warnings from static analysers, (3) additional instrumentation injected by compilers, (4) compiler optimizations based on domain declarations, (5) the standard can adopt this notation to more formally specify its preconditions.</p>
 
-<h2>Specify function's co-domain</h2>
+<h2>Specify function's range</h2>
 
-<p>In the above example with function <code>abs()</code> a hypothetical tool could detect that expression <code>sqrt(abs(x))</code> is always fine only if it knew that the co-domain of <code>abs</code> is equal (or smaller) than the domain of <code>sqrt</code>. We need to be able to constrain the allowed function output in order for automated tools to be able to verify if other functions' domain requirements are satisfied. </p>
+<p>Here, we use term 'range' in the mathematical sense: the set of all possible values that the function can return (a subset of function's co-domain). In the above example with function <code>abs()</code>, a hypothetical tool could detect that expression <code>sqrt(abs(x))</code> is always fine only if it knew that the range of <code>abs</code> is equal (or smaller) than the domain of <code>sqrt</code>. We need to be able to constrain the allowed function output in order for automated tools to be able to verify if other functions' domain requirements are satisfied. </p>
 
 <p>In this case a function author specifies the contract and (likely) the same author guarantees it. Function's user can rely on the guarantee. It is much less likely that this contract is broken, because it is the same person that declares and later ensures the obligation. And conversely, if the author makes an error in the function, he is equally likely to make an error in specifying the contract.</p>
 
@@ -135,12 +137,12 @@ public:
 
 <p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return). Also, in case of thread or context switching, if a function decides to temporarily break such class-scope assertion, it must guard this action with a lock or equivalent, so that other threads do not see an object with a broken contract.</p>
 
-<p>Class-level assertions (or class invariants) could be use as a criterion for good abstractions, much like axioms in concepts. If you cannot specify an invariant, it might be an indication that the design/abstraction may be poor or this should not have been made a class.</p>
+<p>Class-level assertions (or class invariants) could be used as a criterion for good abstractions, much like axioms in concepts. If you cannot specify an invariant, it might be an indication that the design/abstraction may be poor or this should not have been made a class.</p>
 
 <h2>Specify equivalent expressions</h2>
 
 
-<p>Often library interfaces offer more than one way of doing the same thing. For instance, checking if a container contains at least one element can be checked in two ways: <code>cont.empty()</code> and <code>cont.size() != 0</code>. The latter is more general and could be used to check for emptiness, but there are occasions where the former can perform faster. This justifies the existence of the two forms. However, the job of matching one function's domain with other function's co-domain would be severely impeded if either specified the contract with a different (albeit equivalent) expression. consider:</p>
+<p>Often library interfaces offer more than one way of doing the same thing. For instance, checking if a container contains at least one element can be checked in two ways: <code>cont.empty()</code> and <code>cont.size() != 0</code>. The latter is more general and could be used to check for emptiness, but there are occasions where the former can execute faster. This justifies the existence of the two forms. However, the job of matching one function's domain with other function's co-domain would be severely impeded if either specified the contract with a different (albeit equivalent) expression. Consider:</p>
 
 <pre>template &lt;typename T&gt;
 class vector
@@ -153,11 +155,11 @@ vec.resize(1);
 return vec.front();       <em>// safe?</em>
 </pre>
 
-<p>Can we match what <code>resize</code> guarantees with what <code>front</code> expects? The two expressions are different. It would be much easier if we were able to explicitly declare that for any container expressions <code>cont.empty()</code> and <code>cont.size() != 0</code> are equivalent. This is somewhat similar to class-level assertions, but the declaration applies to more than one class, now we are only interested in the public interfaces, and we can express equivalence between expressions that have side effects. for instance, we can specify that <code>cont.clear()</code> is equivalent to <code>cont.resize(0)</code>. Out of all "constraints" described in this section, this is the only one where term "value constraint" is inadequate. This is a constraint on the semantics of expressions.</p>
+<p>Can we match what <code>resize</code> guarantees with what <code>front</code> expects? The two expressions are different. It would be much easier if we were able to explicitly declare that for any <code>std::vector</code> expressions <code>vec.empty()</code> and <code>vec.size() != 0</code> are equivalent. This is somewhat similar to class-level assertions, but the declaration applies to more than one class, now we are only interested in the public interfaces, and we can express equivalence between expressions that have side effects. for instance, we can specify that <code>vec.clear()</code> is equivalent to <code>vec.resize(0)</code>. Out of all "constraints" described in this section, this is the only one where term "value constraint" is inadequate. This is a constraint on the semantics of expressions. But we need it for the automated tools to make an effective use of other value constraints.</p>
 
 <h2>Loop variants</h2>
 
-<p>This is somewhat similar to an assertion. It can help convince oneself that a non-trivial loop will ultimately terminate. Sometimes it is not easily seen, because there is no loop counter. We may for instance inspect elements in the collection by skipping some elements, increasing or shrinking, the collection. A loop variant is an expression that evaluates to an integral non-negative number. It is expected that in each loop iteration evaluating this expression renders a number smaller than in the previous iteration. It is also expected that when the value renders zero, the loop terminates.</p>
+<p>Note that this is not the same as loop <em>invariant</em> (which can be handled by a block-level invariant). This is somewhat similar to an assertion. It can help convince oneself that a non-trivial loop will ultimately terminate. Sometimes it is not easily seen, because there is no loop counter. We may for instance inspect elements in the collection by skipping some elements, increasing or shrinking, the collection. A loop variant is an expression that evaluates to an integral non-negative number. It is expected that in each loop iteration evaluating this expression renders a number smaller than in the previous iteration. It is also expected that when the value renders zero, the loop terminates.</p>
 
 <p>A framework for supporting value constraints need not address all the above needs. We believe that only supporting the declaration of function domain is a big help in itself. Note that while assertions loop variants need to work with expressions, the features for specifying function domain and co-domain need not necessarily use expressions. We address this in detail in the later sections.</p>
 
@@ -173,13 +175,13 @@ return vec.front();       <em>// safe?</em>
 */</em>
 double sqrt(double x);</pre>
 
-<p>But for structured comments like the above, C++ has an alternative: [[attributes]]. Attributes are akin to comments because they cannot affect the semantics of the program. On the other hand they can be used as hints for optimizations, warnings and any kind of program analysis. If the expectation of value constraints is to affect the program behaviour, attributes will not do, and a special language feature would need to be devised.</p> 
+<p>But for structured comments like the above, C++ has an alternative: [[attributes]]. Attributes are akin to comments because they intended not to affect the semantics of correct programs. On the other hand they can be used as hints for optimizations, warnings and any kind of program analysis. If the expectation of value constraints is to affect the program behaviour, attributes will not do, and a special language feature would need to be devised.</p> 
 
 <p>An ideal &mdash; and unrealistic &mdash; support for value constraints is for compiler to check any possible flow in the program and signal a compiler error whenever a breach of the constraint is going to happen. Because this is not doable, the we aim at the support that is not entirely satisfactory, but believed to be better than none.</p>
 
 <h2>Improved documentation</h2>
 
-<p>One of the obvious uses of formalized value constraints is the automated generation of documentation. Even if developers do not use any tool for generating documentation, there is still a gain. When a developer sees the declaration of the function she is going to use, she can immediately see the value constraints along. If they are a language feature, developers are more encouraged to use them (even though comments would do). Since this does not affect program semantics [[attributes]] are sufficient.</p>
+<p>One of the obvious uses of formalized value constraints is the automated generation of documentation. Even if developers do not use any tool for generating documentation, there is still a gain. When a developer sees the declaration of the function she is going to use, she can immediately see the value constraints as well. If they are a language feature, developers are more encouraged to use them (even though comments would do). Since this does not affect program semantics [[attributes]] are sufficient.</p>
 
 <h2>Static analysis</h2>
 
@@ -212,6 +214,8 @@ void test() precondition{ preconditions_on = true; }
 }
 </pre>
 
+<p>Note that we assign a new value to a global object in the precondition. One possible way to address this issue is to say that any modification to the program state in value constraints renders an undefined behaviour. Another is to say that this is correct a program, but the expression may or may not be evaluated. This makes it an unspecified behaviour.</p>
+
 <p>And similarly, is the following a reliable way of checking if a number is negative?</p>
 
 <pre>double sqrt(double x) precondition { x >= 0.0; };
@@ -225,26 +229,32 @@ double is_negative(double x)
 }
 </pre>
 
+<p>We probably do not want to encourage such contrived usages, but can this be expressed in the standard? If we say that it is unspecified whether value constraints are evaluated or not, we would make it clear that the code as above is not reliable. But then again, someone else may be disappointed that his precondition is not guaranteed to be checked.</p>
+
 <h2>Value constraints in overloaded functions</h2>
 
 <p>Consider the following declaration:</p>
 
 <pre>
-template &lt;typename IIT&gt; <em>// requires: InputIterator&lt;IIT&gt;</em>
-void displayFirstSecondNext(IIT beg, IIT end);
+template &lt;typename InputIter&gt;
+void displayFirstSecondNext(InputIter beg, InputIter end);
 <em>// requires: std::distance(beg, end) &gt;=2</em>
 </pre>
 
-<p>Is function template <code>std::distance</code> referentially transparent? The answer is: it is not templates that can or cannot be pure but functions. Some functions instantiated from this template will be pure, others will not &mdash; it depends what iterator type the template will be instantiated with. Consider <code>InputIterator</code>. In the worst case (of <code>std::istream_iterator</code>) incrementing the iterator invalidates other iterators referring to the same stream. This is a tricky behaviour: by changing our internal copies of objects (iterators), we alter (invalidate) other, external objects. Function <code>std::distance</code> does increment iterators. If our precondition was to be evaluated, this might cause a UB in the program.</p>
+<p>Is function template <code>std::distance</code> referentially transparent? The answer is: it is not templates that can or cannot be pure but functions. Some functions instantiated from this template will be pure, others will not &mdash; it depends what iterator type the template will be instantiated with. Consider <code>InputIterator</code>. In the worst case (of <code>std::istream_iterator</code>) incrementing the iterator invalidates other iterators referring to the same stream. This is a tricky behaviour: by changing our internal copies of objects (iterators), we alter (invalidate) other, external objects. Function <code>std::distance</code> does increment iterators. If our precondition was to be evaluated, this might cause an undefined behaviour in the program.</p>
 
-<p>Thus, we have an expression; it is pure and natural to use for some instantiations, and has severe side effects for other instantiations. If we want it to be evaluated only in certain instantiations, another feature needs to be provided. For instance, we will need to specialize a template only to be able to specify a different precondition, or add an annotation that this precondition should not be evaluated if certain compile-time predicate evaluates to <code>true</code>. clearly, on global switch (similar to <code>NDEBUG</code>) saying "disable/enable all value constraint evaluations" will not be enough.</p>
+<p>Thus, we have an expression; it is pure and natural to use for some instantiations, and has severe side effects for other instantiations. We would like the predicate to be evaluated for forward iterators and never evaluated for other iterators. How do we want a concept-programming framework to address the cases like this one?</p>
+
+<p>One option is to say "this case is special: you will not be able to express a precondition". Another is to require of the authors to provide two overloads: one for <code>InputIterator</code>s, the other for <code>ForwardIterator</code>s. They will do exactly the same thing except that one will have a precondition and the other will not. Note that you cannot just say "if the predicate is constant evaluate it otherwise don't evaluate it". In either case we take iterators by value. It is just that input iterators do not expose value semantics &mdash; this cannot be checked by the compiler.</p>
+
+<p>The above case can be solved by introducing a yet another feature: an annotation that a precondition is only evaluated when some compile-time condition is met: in our case only if the iterator is a <code>ForwardIterator</code>. Note that one global switch (similar to <code>NDEBUG</code>) saying "disable/enable all value constraint evaluations" will not be enough.</p>
 
 <h2>Inadvertent increase in run-time complexity</h2>
 <p>There are other reasons for having a more fine grained control of which checks should be enabled. Consider a binary search algorithm. Its runtime complexity is O(log <var>n</var>). It has an obvious precondition that the range we search through is sorted. Performing the sorted check has complexity O(<var>n</var>). Thus by evaluating the precondition, we change the algorithms complexity. This might be unacceptable, even for some debug/testing builds. Runtime complexity is a sort of side effect of an algorithm, and it can be silently added to the function, especially when following a good practise a developer adds an obvious precondition, which would be his primary task, and forgets the secondary task of specifying (using some contract-specific sub-language) the conditions under which this precondition shall be evaluated.</p>
 
 <h2>Run-time response to a broken contract</h2>
 
-<p><a href="#N1962">[N1962]</a> proposes that the action taken upon violating a value constraint should be configurable by the programmer. While we agree this should be configurable, we object to the way of achieving this by <code>std::set_terminate</code>-like registering function. <code>std::set_terminate</code> can be called multiple times from multiple places: different, possibly dynamically-loaded/shared libraries. This makes sense for <code>std::terminate</code>. Every part of the system may acquire a <em>critical</em> resource: one that has to be released even if "exception handling must be abandoned for less subtle error handling techniques". In that case the component also needs to register an additional clean-up function. In case of broken contract situation, we do not need or want that. We believe only the person that assembles the final program from the components and libraries, should be empowered to to decide how broken contracts are handled. Only him does have the knowledge if this is a test or a retail build; if the slow-down of some run-time checks can be afforded. Libraries do not know that: they do not know in what environment they will be used.</p>
+<p><a href="#N1962">[N1962]</a> as well as <a href="#N4075">[N4075]</a> propose that the action taken upon violating a value constraint should be configurable by the programmer. While we agree this should be configurable, we object to the way of achieving this by <code>std::set_terminate</code>-like registering function. Language allows that <code>std::set_terminate</code> can be called multiple times from multiple places: different, possibly dynamically-loaded/shared libraries. This makes sense for <code>std::terminate</code>. Every part of the system may acquire a <em>critical</em> resource: one that has to be released even if "exception handling must be abandoned for less subtle error handling techniques". In that case the component also needs to register an additional clean-up function. In case of broken contract situation, we do not need or want that flexibility. We believe only the person that assembles the final program from the components and libraries, should be empowered to to decide how broken contracts are handled. Only him does have the knowledge if this is a test or a retail build; if the slow-down of some run-time checks can be afforded. Libraries do not know that: they do not know in what environment they will be used.</p>
 
 <p>Additionally, the <code>std::set_terminate</code> mechanism has a certain flow. Unless you apply some syntactic contortions, you cannot set the handler for functions executed before <code>main()</code>.</p>
 
@@ -253,7 +263,7 @@ void displayFirstSecondNext(IIT beg, IIT end);
 
 <h1>Assisting static analysis</h1>
 
-<p>Automated tools already perform static analysis, even without any support from the programmer. However, additional hints from developers could enable even further analysis, or enable vendors to add analysis in compilers at lower expense. In the example like the following, a compiler can fairly easily detect that a potential UB is at hand:</p>
+<p>Automated tools already perform static analysis, even without any support from the programmer. However, additional hints from developers could enable even further analysis, or enable vendors to add analysis in compilers at lower expense. In the example like the following, a compiler can fairly easily detect that a potential undefined behaviour is at hand:</p>
 
 <pre>int* produce()
 {
@@ -269,9 +279,9 @@ void consume(int* p)
 consume(produce());
 </pre>
 
-<p>But even here, certain problems occur. What if the two functions are compiled separately; e.g., if <code>produce</code> is part of a separate third party library? Even if compiler performs a per-file analysis, it may not have sufficient resources (RAM) to perform a global link-time analysis. Even if the analysis is successful and detects a potential UB, it doesn't tell us who of the three: author of <code>produce</code>, author of <code>consume</code> or the guy who assembles them, is responsible for the situation and should fix the problem. This is somewhat similar to the situation we face today with template instantiation error messages. Compiler sees that there is a syntax/type error, it can give you the entire context, but it cannot tell at which level of instantiation process the source of the problem lays.</p>
+<p>But even here, certain problems occur. What if the two functions are compiled separately; e.g., if <code>produce</code> is part of a separate third party library? Even if compiler performs a per-file analysis, it may not have sufficient resources (RAM) to perform a global link-time analysis. Even if the analysis is successful and detects a potential undefined behaviour, it doesn't tell us who of the three: author of <code>produce</code>, author of <code>consume</code> or the guy who assembles them, is responsible for the situation and should fix the problem. This is somewhat similar to the situation we face today with template instantiation error messages. Compiler sees that there is a syntax/type error, it can give you the entire context, but it cannot tell at which level of instantiation process the source of the problem lays.</p>
 
-<p>Also, as shown in the example with <code>sqrt</code> it is sometimes not possible to tell from only observing the reads from a variable what the function's requirement is. In the case of <code>sqrt</code> it is not the UB that we want to avoid but an infinite recursion.</p>
+<p>Also, as shown in the example with <code>sqrt</code> it is sometimes not possible to tell from only observing the reads from a variable what the function's requirement is. In the case of <code>sqrt</code> it is not the undefined behaviour that we want to avoid but an infinite recursion.</p>
 
 <p>Another reason where assisting the static analysis may prove useful is when there is more than one way to express a given condition. Consider the following code:</p>
 
@@ -290,6 +300,9 @@ void test(Vector &amp; vec)
 </pre>
 
 <p>You know that <code>vec.size() != 0</code> and <code>!vec.empty()</code> mean the same thing, but compiler may not, especially if it cannot look inside the definitions of member functions (because they are compiled separately).</p>
+
+<p>However, an analysis like this can produce too many false warnings. This calls for another [[attribute]] for indicating that the programmer doesn't want certain parts of the code to be warned about potential value constraint violations.</p>
+
 
 <h2>How long does a condition hold?</h2>
 
@@ -377,7 +390,7 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 }
 </pre>
 
-<p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused a UB later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
+<p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused an undefined behaviour later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
 
 
 <h2><code>constexpr</code> functions and literal types</h2>
@@ -427,7 +440,7 @@ Obviously, we store (sometimes) an object of type <code>T</code> inside, but it 
 
 <pre>// invariant: !is_initialized_ || invariant(*storage());</pre>
 
-<p>Similarly, a vector of <code>T</code>s (<code>std::vector&lt;T&gt;</code>) can be thought of as being composed of the <code>T</code>s it contains. This is reflected in how its equality comparison is defined and how const-ness is propagated. A value of the container is composed of the values of its elements. In a similar manner, we would like to be able to express invariants on composed types, i.e., the vector's invariant holds iff some vector-specific conditions are satisfied and all vector elements' invariants hold. We are not quite sure, if this needs to be specified explicitly, or is it not enough for the machine to observe that if there is some nested T accessible from the vector, its invariant must hold. But will the machine know that the result of <code>vec.back()</code> should have its invariant hold? after all, calling <code>back()</code> is not always allowed, and may render a UB.</p>
+<p>Similarly, a vector of <code>T</code>s (<code>std::vector&lt;T&gt;</code>) can be thought of as being composed of the <code>T</code>s it contains. This is reflected in how its equality comparison is defined and how const-ness is propagated. A value of the container is composed of the values of its elements. In a similar manner, we would like to be able to express invariants on composed types, i.e., the vector's invariant holds iff some vector-specific conditions are satisfied and all vector elements' invariants hold. We are not quite sure, if this needs to be specified explicitly, or is it not enough for the machine to observe that if there is some nested T accessible from the vector, its invariant must hold. But will the machine know that the result of <code>vec.back()</code> should have its invariant hold? after all, calling <code>back()</code> is not always allowed, and may render a undefined behaviour.</p>
 
 <p>Another open question is if we should check invariants of member subobjects if they are references (and therefore do not pertain to the master object’s value).</p>
 
@@ -559,6 +572,8 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 <h1>Acknowledgements</h1>
 
 <p>Lots of content in this paper is inspired by work in <a href="#N1962">[N1962]</a>, <a href="#N2887">[N2887]</a> and <a href="#N3351">[N3351]</a>.</p>
+
+<p>Lawrence Crowl reviewed the paper, highlighted issues and suggested improvements.</p>
 
 <p>Gabriel Dos Reis suggested the "STL test" for a precondition framework.</p>
 
