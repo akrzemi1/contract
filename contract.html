@@ -317,7 +317,7 @@ Iter test(Iter b, Iter e, Value_type&lt;Iter&gt; v)
 }
 </pre>
 
-<p>Assuming that a static analyser can somehow figure out that <code>sort</code> leaves elements in the state that satisfies the condition <code>is_sorted</code>, can it be sure that the condition still holds when <code>fun</code> is finished? After all <code>fun</code> could be manipulating iterators that alias <code>b</code> and <code>e</code>. Apparently, static analysis cannot give us a 100% bug-free guarantee. It can only helps detect certain bugs.</p>
+<p>Assuming that a static analyser can somehow figure out that <code>sort</code> leaves elements in the state that satisfies the condition <code>is_sorted</code>, can it be sure that the condition still holds when <code>fun</code> is finished? After all <code>fun</code> could be manipulating iterators that alias <code>b</code> and <code>e</code>. Apparently, static analysis cannot give us a 100% bug-free guarantee. It can only helps detect certain bugs. This is where run-time checks can still prove useful even after a heavy static analysis.</p>
 
 <p>Second, it is obvious that a certain condition does not last forever. How is the analyser supposed to know when a given condition ceases to hold? One easy answer would be to say that when a non-<code>const</code> operation is called on the object all conditions it might  have satisfied are now considered not satisfied. But this would break even simple use cases:</p>
 
@@ -327,7 +327,7 @@ auto e = vec.end();   <em>// non-const: invalidates all conditions</em>
 std::sort(b, e);      <em>// requires: valid_range(b, e)</em>
 </pre>
 
-<p>Even if the analyser knows that <code>vec.begin()</code> and <code>vec.end()</code> form a valid range, they are a non-<code>const</code> operations and invalidate any assumptions about their value/state. Any language feature for assisting static analysis must provide a way of specifying which operations invalidate which conditions. But this is likely to make the specifications very complicated, and discourage everybody from using the feature.</p>
+<p>Even if the analyser knows that <code>vec.begin()</code> and <code>vec.end()</code> form a valid range, they are a non-<code>const</code> operations and invalidate any assumptions about their value/state. Any language feature for assisting static analysis must provide a way of specifying which operations invalidate which conditions (e.g., a way of declaring some functions as non-modifying even when they are non-<code>const</code>). But this is likely to make the specifications very complicated, and discourage everybody from using the feature.</p>
 
 
 <h1>"Properties": a hypothetical language feature</h1>
@@ -354,7 +354,7 @@ int i = back(); // required property is present
 v.pop_back();   // looses property is_non_empty
 </pre>
 
-<p>How do we know when a property is lost? In the most simple case we could say that every mutating (non-const) function called upon our object discards all its properties. But this would imply that in our case even calling <code>back()</code> discards the property, so a more complex way of specifying how the properties are preserved may be required.</p>
+<p>How do we know when a property is lost? In the most simple case we could say that every mutating (non-const) function called upon our object discards all its properties. In our example, we know that property <code>is_non_empty</code> is not always lost after the call to <code>pop_back</code>, but in order to keep the specification language fairly simple we may need to accept this simplification. But the rule "discard every property on non-const function call" would imply that in our case even calling <code>back()</code> discards the property, so a more complex way of specifying how the properties are preserved may be required.</p>
 
 <p>So, what do we buy using properties rather than considering any boolean expression such a property? First, properties are pure: they have no side effects. Second, we can express value constraints that are not expressible with expressions:</p>
 
@@ -371,6 +371,8 @@ class vector
 template &lt;typename Iter&gt;
 void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;end());
 </pre>
+
+<p>In this model of static analysis, one function's preconditions are matched with other function's postconditions. But because properties have no body, it is not possible for the static analyser to determine if a function that declares a property in its postcondition really satisfies it. Properties can be mixed with normal boolean predicates, though. The author decides if his value constraint is implementable or not.</p>
 
 <p>We do not propose to add such properties to the language. We just want to show a different perspective on value constraints. <a href="#N1962">[N1962]</a> also offers this perspective, but we fear that the focus on broken contract handlers and the order of evaluation of different value constraints, might have obfuscated this idea. A similar effect (as having properties) could be achieved by annotating some value constraints (which use normal expressions) that they must never be evaluated. </p>
 
@@ -399,11 +401,42 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 
 <p>A similar question needs to be answered for literal types and invariants. For literal types it is required that they have at least one non-copy/move <code>constexpr</code> constructor. This constructor can be used to create a compile-time constant, whose invariant is expected to hold. This may require that the invariant should also be <code>constexpr</code>, as otherwise it is impossible to verify it at compile time. On the other hand, the interface of user-defined literal types can be divided into compile-time (<code>constexpr</code>) and run-time part. The effects of the other one may alter other parts of the program state that may only be invariant-verified with run-time expressions. More, some constructors are <code>constexpr</code> even for non-literal classes: their purpose is to guarantee the static initialization of global objects. It is not clear if this should affect the <code>constexpr</code> requirement on the class invariant.</p>
 
-<h2>When should invariant hold?</h2>
 
-<p>When is class invariant supposed to hold? Objects are manipulated via class's public interface. Public functions often need to compromise the invariant, but they always put the invariant back when they finish -- even via an exception. This means that as long as no function from the object's public interface is being invoked on it, or any of its subobjects manipulated, the object's invariant should hold.</p> 
+<h2>Function's public interface</h2>
 
-<p>This is different from the common notion that invariants should hold before entering any public function or destructor and after leaving any public member function or constructor. For instance, inside a public function you can invoke other public functions and around these nested calls you do not expect the invariant to hold.</p>
+<p>For the purpose of specifying the semantics of value constrains, we may need to redefine the concept of class's public interface. Consider the following definition:</p>
+
+<pre>class Account
+{
+public:
+  void modify(Param p);
+  friend void swap(Account&amp; a1, Account&amp; a2);
+private:
+  // ...
+};
+</pre>
+
+<p>Function <code>swap</code>, although it is not a public member function, clearly is part of <code>Account</code>'s public interface. I.e., we allow that it temporarily breaks the invariant of objects <code>a1</code> and <code>a2</code>. The technique with defining operator-like free functions as friends is not just a trick. In fact it is sometimes recommended for operators like <code>operator==</code> when the two arguments are to be treated symmetrically.</p>
+
+<p>At this point we are not sure if it is sufficient to define class's public interface as the set of its public member functions and its friend functions. An additional way of specifying what is class's public interface may be necessary. This is a problem not limited to value constraints. Such specification could be useful for enabling a more fine-grained function lookup rule. Current ADL is known to pick too many overloads.</p>
+
+
+<h2>When should a class invariant hold?</h2>
+
+<p>When is class invariant supposed to hold? Objects are manipulated via class's <em>public interface</em>. Functions from class's public interface (public functions or friend functions) often need to compromise the invariant, but they always put the invariant back when they finish -- even via an exception. This means that as long as no function from the object's public interface is being invoked on it, or any of its subobjects manipulated, the object's invariant should hold. Consider:</p>
+
+<pre>Tool t;
+_1:;
+fun1()
+_2:;
+fun2();
+_3:;
+t.fun();
+_4:;</pre>
+
+<p>In run-time checking approach it is verified that the invariant of <code>t</code> holds at points <code>_1</code>, <code>_3</code> and <code>_4</code>. But we also claim that the invariant should hold at point <code>_2</code>. It is impractical to inject a run-time check in there, but is static analyser detects that the invariant may be broken at <code>_2</code>, it should definitely report it as invariant breach.</p>
+
+<p>This is different from the common notion that invariants should hold before entering any public function or destructor and after leaving any public member function or constructor. For instance, inside a public function you can invoke other public functions and around these nested calls you do not expect the invariant to hold. And conversely, an invariant should hold at <em>any</em> time between the calls to public interface. Putting the run-time checks in thus identified places is impossible, which proves that the approach "check before and after the call to any public member functions" are the consequence of implementation limitations -- not the definition of a class invariant. This also shows that run-time checks are not enough to guarantee the safety of the program: static analysis may be required to complement them.</p>
 
 
 <h2>Composing invariants</h2>
@@ -442,23 +475,12 @@ Obviously, we store (sometimes) an object of type <code>T</code> inside, but it 
 
 <p>Similarly, a vector of <code>T</code>s (<code>std::vector&lt;T&gt;</code>) can be thought of as being composed of the <code>T</code>s it contains. This is reflected in how its equality comparison is defined and how const-ness is propagated. A value of the container is composed of the values of its elements. In a similar manner, we would like to be able to express invariants on composed types, i.e., the vector's invariant holds iff some vector-specific conditions are satisfied and all vector elements' invariants hold. We are not quite sure, if this needs to be specified explicitly, or is it not enough for the machine to observe that if there is some nested T accessible from the vector, its invariant must hold. But will the machine know that the result of <code>vec.back()</code> should have its invariant hold? after all, calling <code>back()</code> is not always allowed, and may render a undefined behaviour.</p>
 
+<p>This issue does not appear if we adopted the view that invariants hold immediately before and after the call to public interface functions. But we do not constrain our analysis to this "run-time checks" view.</p>
+
+<p>This also implies that when two threads run concurrently and one is in the middle of modifying object <code>x</code>, the other thread should not be able to see the partial state of <code>x</code> in which the invariant does not hold.</p>
+ 
 <p>Another open question is if we should check invariants of member subobjects if they are references (and therefore do not pertain to the master object’s value).</p>
 
-<h2>Function's public interface</h2>
-
-<p>For the purpose of specifying the semantics of value constrains, we may need to redefine the concept of class's public interface. Consider the following definition:</p>
-
-<pre>class Account
-{
-public:
-  void modify(Param p);
-  friend void swap(Account&amp; a1, Account&amp; a2);
-private:
-  // ...
-};
-</pre>
-
-<p>Function <code>swap</code>, although it is not a public member function, clearly is part of <code>Account</code>'s public interface. I.e., we allow that it temporarily breaks the invariant of objects <code>a1</code> and <code>a2</code>. The technique with defining operator-like free functions as friends is not just a trick. In fact it is sometimes recommended for operators like <code>operator==</code> when the two arguments are to be treated symmetrically.</p>
 
 <h2>Protected members</h2>
 
@@ -466,7 +488,9 @@ private:
 
 <p>On the other hand, protected functions may also need to specify their preconditions as they constitute an interface for deriving classes (which can also be considered users), and for them calling other protected members appears reasonable.</p>
 
-<p>Similarly, it is possible that class's protected interface may assume an invariant that is narrower than the class's public interface's invariant. Protected members may require less of the program state than the public members, but they still may require something. Not suer if this use case is worth complicating the language.</p>
+<p>Similarly, it is possible that class's protected interface may assume an invariant that is narrower than the class's public interface's invariant. Protected members may require less of the program state than the public members, but they still may require something. In other words, we claim that a class exposes two interfaces: one for external callers and the other for derived classes; the two interfaces may require two sets of value constraints. Not sure if this use case is worth complicating the language.</p>
+
+
 
 <h1>Constraining STL</h1>
 
@@ -547,27 +571,38 @@ bool binary_search(It b, It e, T v, Comp cmp)
 precondition{ is_partitioned_for_element(b, e, v, cmp) };
 </pre>
 
-<p>Again, we do not propose to standardize the above, but we show that preconditions in STL algorithms are expressible with  a sufficiently complex facility.</p>
-    
+<p>Can the above tasks be accomplished with "run-time checks" approach? The biggest problem is that <code>is_valid_range</code> is not implementable in the general case as a function (template). The only way to check if two iterators form a valid range is to increment the first one and check if we reach the second one. But in case we get an invalid range, such function rather than returning <code>false</code> will run forever or render an undefined behaviour. Rather than introducing a new notion of a "property", we could annotate (with attributes) some functions as "not defined on purpose". If the compiler sees such function in a value constraint it skips the run-time check (but may still perform static analysis). This way we could mix normal functions with non-implementable functions in preconditions.</p>
+
+<p>Again, we do not propose to standardize the above, but we show that preconditions in STL algorithms are expressible with a sufficiently complex facility.</p>
+  
+
+  
 <h1>What do we need to standardize?</h1>
+
 
 <p>The language feature of value constraints can be divided into two main parts. (1) What value constraints we define and how, (2) how do we handle run-time response to a broken value constraint.</p>
 
 
 <h2>Defining value constraints</h2>
 
-<p>At this point it is too early to decide on the details, but one thing appears fairly uncontroversial. Value constraints support needs two accommodate two fairly opposite requirements: (1) no run-time overhead in cases like (<code>operator[]</code> for vectors),  (2) guaranteed (in certain situations) evaluation of the predicates (where performance requirement is not critical).</p>
+<p>At this point it is too early to decide on the details, but one thing appears fairly uncontroversial. Value constraints support needs to accommodate two fairly opposite requirements: (1) no run-time overhead in cases like (<code>operator[]</code> for vectors),  (2) guaranteed (in certain situations) evaluation of the predicates (where performance requirement is not critical).</p>
 
-<p>This calls for the following semantics. If a piece of code that "relies" on a value constraint is executed, and its corresponding value constraint would return false <em>if it were evaluated</em> (but no evaluation is required), the behaviour of the program is undefined. Any value constraint "in its proper moment" may be evaluated once or not evaluated -- it is <em>unspecified</em>. </p>
+<p>This calls for the following semantics:</p>
+<ol>
+<li>If a <em>piece of code</em> (a function or a block) <em>relies</em> on a given value constraint <em>C</em> (e.g., a function relies on its precondition, a public member function relies on class invariant), and this code is executed but value constraint <em>C</em> would return false <em>if it were evaluated</em> (but no evaluation is required), the behaviour of the program is undefined. &mdash; this accommodates the situations ranging from buffer overflow to calling terminate handlers.</li>
+<li>If the control reaches the point where a value constraint <em>could be evaluated</em> (for preconditions this moment is just before function call, etc.), it is <em>unspecified</em> whether the value constraint is evaluated once or not evaluated at all. &mdash; this handles the behaviours ranging from performing all run-time checks to disabling them all by a compiler switch or some [[attributes]].</li>
+</ol>
 
-<p>One thing that appears non-controversial is that declarations of preconditions and postconditions need to be part of function declaration, so that they are accessible by the function users who may not have access to function definitions. We leave it open whether a value constraint declaration should affect function's signature or type or affect the overload resolution mechanism. </p>
+<p>One thing that appears non-controversial is that declarations of preconditions and postconditions need to be part of function declaration, so that they are accessible by the function users who may not have access to function definitions. We leave it open whether a value constraint declaration should affect function's signature or type or affect the overload resolution mechanism; although it looks like affecting function's type would make it impossible to retrofit value constraints into the existing code.</p>
 
 
 <h2>Run-time response</h2>
 
 <p>One option is not to standardize what should happen when we detect at run-time a broken value constraint (whether to throw or terminate or abort or ignore), and let the vendors decide how they want to handle these cases. With this approach a minimum conforming implementation only needs to syntax- and type-check the declarations.</p>
 
-<p>It may be useful to standardize a set of [[attributes]] for giving hints on what conditions to evaluate value constraints, e.g., "evaluate only if <code>T</code> satisfies some requirements", or "this constraint has complexity O(N), evaluate it only when O(N) and bigger complexities are enabled", or "never evaluate this".</p>
+<p>But there may be parts of programs that require a guaranteed run-time evaluation of a precondition in order to prevent the subsequent function execution and a guaranteed release of critical resources. The minimum requirement then is to annotate "critical" value constraints and a call to <code>std::terminate</code>, whose goal is already to collect the critical resources whose release cannot be skipped.</p>
+
+<p>It may be useful to standardize a set of [[attributes]] for giving hints on what conditions to evaluate value constraints, e.g., "evaluate only if <code>T</code> satisfies some requirements", or "this constraint has complexity O(N), evaluate it only when O(N) and bigger complexities are enabled", "never evaluate this precondition", or "never evaluate this function if it is in a value constraint".</p>
 
 <h1>Acknowledgements</h1>
 
