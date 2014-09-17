@@ -279,9 +279,14 @@ bool predicate(int i) noexcept  <em>/* requires: true */</em>
     return positive_predicate(i);
 </pre>
 
-Now imagine that we make a call <code>predicate(0)</code>. Due to a bug in the function, we call <code>positive_predicate</code> with a broken precondition. It doesn't help that the throw from the handler is made from the context outside of function <code>positive_predicate</code>, because it is still made inside the caller function  <code>predicate</code>, which is also <code>noexcept</code>.
+<p>Now imagine that we make a call <code>predicate(0)</code>. Due to a bug in the function, we call <code>positive_predicate</code> with a broken precondition. It doesn't help that the throw from the handler is made from the context outside of function <code>positive_predicate</code>, because it is still made inside the caller function  <code>predicate</code>, which is also <code>noexcept</code>.</p>
 
 <p>The recommendations from <a href="N3248">[N3248]</a> (that functions with narrow contract should not be defined as <code>noexcept</code>) may also apply in the case of value constraints development. We consider it an open issue.</p>
+
+<h2>Disabling run-time checks</h2>
+
+<p>Unlike with the static analysis approach, evaluating value constraints adds run-time overhead. Wile the overhead is acceptable in some cases, it is desirable to be able to globally disable the checks in other cases. This issue is similar to C-style <code>assert</code>s, which can be retained in debug/test builds but removed in release builds. C-style <code>assert</code>s are disabled by recompiling the entire program; this includes all 3rd party libraries, or linking with the alternative pre-compiled versions. Can this be made better for language-level value constraints? <a href="N1800">[N1800]</a> suggests an implementation (for preconditions) that could be capable of handling such requirement: each function has two entry points: first that checks the precondition and then evaluates the function, second that skips the evaluation of the precondition. Once you have the two entry points it is just the question of changing the addresses. This solution results in bigger libraries although the final executables could be optimized.</p>
+
 
 <h1>Assisting static analysis</h1>
 
