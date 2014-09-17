@@ -231,6 +231,8 @@ double is_negative(double x)
 
 <p>We probably do not want to encourage such contrived usages, but can this be expressed in the standard? If we say that it is unspecified whether value constraints are evaluated or not, we would make it clear that the code as above is not reliable. But then again, someone else may be disappointed that his precondition is not guaranteed to be checked.</p>
 
+<p>If we consider value constraints with side effects an 'invalid' code, do we force the compiler to reject every such case with a diagnostic message? If it is impossible in the general case (and so it seams), we have to accept that such code is valid, but do we allow the compiler to reject these cases where it can prove that we have a side effect?</p>
+
 <h2>Value constraints in overloaded functions</h2>
 
 <p>Consider the following declaration:</p>
