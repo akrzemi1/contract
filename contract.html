@@ -256,6 +256,7 @@ void displayFirstSecondNext(InputIter beg, InputIter end);
 <h2>Inadvertent increase in run-time complexity</h2>
 <p>There are other reasons for having a more fine grained control of which checks should be enabled. Consider a binary search algorithm. Its runtime complexity is O(log <var>n</var>). It has an obvious precondition that the range we search through is sorted. Performing the sorted check has complexity O(<var>n</var>). Thus by evaluating the precondition, we change the algorithms complexity. This might be unacceptable, even for some debug/testing builds. Runtime complexity is a sort of side effect of an algorithm, and it can be silently added to the function, especially when following a good practise a developer adds an obvious precondition, which would be his primary task, and forgets the secondary task of specifying (using some contract-specific sub-language) the conditions under which this precondition shall be evaluated.</p>
 
+
 <h2>Run-time response to a broken contract</h2>
 
 <p><a href="#N1962">[N1962]</a> as well as <a href="#N4075">[N4075]</a> propose that the action taken upon violating a value constraint should be configurable by the programmer. While we agree this should be configurable, we object to the way of achieving this by <code>std::set_terminate</code>-like registering function. Language allows that <code>std::set_terminate</code> can be called multiple times from multiple places: different, possibly dynamically-loaded/shared libraries. This makes sense for <code>std::terminate</code>. Every part of the system may acquire a <em>critical</em> resource: one that has to be released even if "exception handling must be abandoned for less subtle error handling techniques". In that case the component also needs to register an additional clean-up function. In case of broken contract situation, we do not need or want that flexibility. We believe only the person that assembles the final program from the components and libraries, should be empowered to to decide how broken contracts are handled. Only him does have the knowledge if this is a test or a retail build; if the slow-down of some run-time checks can be afforded. Libraries do not know that: they do not know in what environment they will be used.</p>
@@ -264,6 +265,23 @@ void displayFirstSecondNext(InputIter beg, InputIter end);
 
 <p>We are not aware of any mechanism currently available in C++ that would facilitate our needs. But since function <code>main</code> has the property of being required to be defined only once across the executable program, a solution we are leaning towards is to apply some special annotation around function <code>main</code> that would indicate what the user's preference is on the handling of broken contracts.</p>
 
+
+<h2>What can a broken contract handler do?</h2>
+
+<p>The most reasonable default answer appears to be <code>std::terminate</code>, which means "release critical resources and abort". One may wish to override the default in order to do special logging. We believe that it is not a good idea to throw from a broken contract handler. First, throwing an exception is often an action taken inside a function,in a situation where it cannot satisfy the postcondition, to make sure that class invariants are preserved. In other words, if you catch an exception or are in the middle of stack unwinding, you can safely assume that all objects' invariants are satisfied (and you can safely call destructors that may rely on invariants). If it were possible to throw from the handlers, his expectation would be violated. Also, you can imagine functions that are marked as <code>noexcept</code> and still impose a value constraint (which happens to fire). <a href="N4110">[N4110]</a> argues that "the exception can be safely thrown in this case (even if the function is <code>noexcept</code>) as it would be thrown in the caller side and not in the callee side". We disagreewith this reasoning. Consider this example:</p>
+
+<pre>bool positive_predicate(int i) noexcept <em>/* requires: i &gt; 0 */</em>;
+bool predicate(int i) noexcept  <em>/* requires: true */</em>
+{
+  if (i &lt; 0)
+    return negative_predicate(i);
+  else
+    return positive_predicate(i);
+</pre>
+
+Now imagine that we make a call <code>predicate(0)</code>. Due to a bug in the function, we call <code>positive_predicate</code> with a broken precondition. It doesn't help that the throw from the handler is made from the context outside of function <code>positive_predicate</code>, because it is still made inside the caller function  <code>predicate</code>, which is also <code>noexcept</code>.
+
+<p>The recommendations from <a href="N3248">[N3248]</a> (that functions with narrow contract should not be defined as <code>noexcept</code>) may also apply in the case of value constraints development. We consider it an open issue.</p>
 
 <h1>Assisting static analysis</h1>
 
@@ -622,8 +640,10 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <ul>
 <li><a name="ACSL">[ACSL]</a> Patrick Baudin, Pascal Cuoq, Jean-Christophe Filli&acirc;tre, Claude March&eacute;, Benjamin Monate, Yannick Moy, Virgile Prevosto, "ACSL: ANSI/ISO C Specification Language" (<a href="http://frama-c.com/download/acsl_1.4.pdf">http://frama-c.com/download/acsl_1.4.pdf</a>),</li>
+<li><a name="N1800">[N1800]</a> Lawrence Crowl, Thorsten Ottosen, "Contract Programming For C++0x" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1800.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1800.pdf</a>),</li>
 <li><a name="N1962">[N1962]</a> Lawrence Crowl, Thorsten Ottosen, "Proposal to add Contract Programming to C++ (revision 4)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html</a>),</li>
 <li><a name="N2887">[N2887]</a> Gabriel Dos Reis, Bjarne Stroustrup, Alisdair Meredith, "Axioms: Semantics Aspects of C++ Concepts" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2887.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2887.pdf</a>),</li>
+<li><a name="N3248">[N3248] Alisdair Meredith, John Lakos, "<code>noexcept</code> Prevents Library Validation" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2011/n3248.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2011/n3248.pdf</a>)</li>
 <li><a name="N3351">[N3351]</a> Bjarne Stroustrup, Andrew Sutton et al., "A Concept Design for the STL" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf</a>),</li>
 <li><a name="N4075">[N4075]</a> John Lakos, Alexei Zakharov, Alexander Beels, "Centralized Defensive-Programming Support for Narrow Contracts (Revision 6)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf</a>),</li>
 <li><a name="N4110">[N4110]</a> J. Daniel Garcia, "Exploring the design space of contract specifications for C++" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf</a>).</li>
