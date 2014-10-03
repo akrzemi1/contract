@@ -1,23 +1,154 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
 <head>
+<meta http-equiv="Content-Type" content="text/html;charset=US-ASCII">
+<style type="text/css">
+pre {margin-left:20pt; }
+pre > i {
+  font-family: "OCR A Extended", "Consolas", "Lucida Console", monospace;
+  font-style:italic;
+}
+code > i {
+  font-family: "OCR A Extended", "Consolas", "Lucida Console", monospace;
+  font-style:italic;
+}
+pre > em {
+  font-family: "OCR A Extended", "Consolas", "Lucida Console", monospace;
+  font-style:italic;
+}
+code > em {
+  font-family: "OCR A Extended", "Consolas", "Lucida Console", monospace;
+  font-style:italic;
+}
+body { color: #000000; background-color: #FFFFFF; }
+del { text-decoration: line-through; color: #8B0040; }
+ins { text-decoration: underline; color: #005100; }
+
+p.example { margin-left: 2em; }
+pre.example { margin-left: 2em; }
+div.example { margin-left: 2em; }
+
+code.extract { background-color: #F5F6A2; }
+pre.extract { margin-left: 2em; background-color: #F5F6A2;
+  border: 1px solid #E1E28E; }
+
+p.function { }
+.attribute { margin-left: 2em; }
+.attribute dt { float: left; font-style: italic;
+  padding-right: 1ex; }
+.attribute dd { margin-left: 0em; }
+
+blockquote.std { color: #000000; background-color: #F1F1F1;
+  border: 1px solid #D1D1D1;
+  padding-left: 0.5em; padding-right: 0.5em; }
+blockquote.stddel { text-decoration: line-through;
+  color: #000000; background-color: #FFEBFF;
+  border: 1px solid #ECD7EC;
+  padding-left: 0.5empadding-right: 0.5em; ; }
+
+blockquote.stdins { text-decoration: underline;
+  color: #000000; background-color: #C8FFC8;
+  border: 1px solid #B3EBB3; padding: 0.5em; }
+
+table { border: 1px solid black; border-spacing: 0px;
+  margin-left: auto; margin-right: auto; }
+th { text-align: left; vertical-align: top;
+  padding-left: 0.4em; border: none; 
+  padding-right: 0.4em; border: none; }
+td { text-align: left; vertical-align: top;
+  padding-left: 0.4em; border: none;
+  padding-right: 0.4em; border: none; }
+</style>
+
 <title>Value constraints</title>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js" type="text/javascript"> </script>
+<script type="text/javascript">$(function() {
+    var next_id = 0
+    function find_id(node) {
+        // Look down the first children of 'node' until we find one
+        // with an id. If we don't find one, give 'node' an id and
+        // return that.
+        var cur = node[0];
+        while (cur) {
+            if (cur.id) return curid;
+            if (cur.tagName == 'A' && cur.name)
+                return cur.name;
+            cur = cur.firstChild;
+        };
+        // No id.
+        node.attr('id', 'gensection-' + next_id++);
+        return node.attr('id');
+    };
+
+    // Put a table of contents in the #toc nav.
+
+    // This is a list of <ol> elements, where toc[N] is the list for
+    // the current sequence of <h(N+2)> tags. When a header of an
+    // existing level is encountered, all higher levels are popped,
+    // and an <li> is appended to the level
+    var toc = [$("<ol/>")];
+    $(':header').not('h1').each(function() {
+        var header = $(this);
+        // For each <hN> tag, add a link to the toc at the appropriate
+        // level.  When toc is one element too short, start a new list
+        var levels = {H2: 0, H3: 1, H4: 2, H5: 3, H6: 4};
+        var level = levels[this.tagName];
+        if (typeof level == 'undefined') {
+            throw 'Unexpected tag: ' + this.tagName;
+        }
+        // Truncate to the new level.
+        toc.splice(level + 1, toc.length);
+        if (toc.length < level) {
+            // Omit TOC entries for skipped header levels.
+            return;
+        }
+        if (toc.length == level) {
+            // Add a <ol> to the previous level's last <li> and push
+            // it into the array.
+            var ol = $('<ol/>')
+            toc[toc.length - 1].children().last().append(ol);
+            toc.push(ol);
+        }
+        var header_text = header.text();
+        toc[toc.length - 1].append(
+            $('<li/>').append($('<a href="#' + find_id(header) + '"/>')
+                              .text(header_text)));
+    });
+    $('#toc').append(toc[0]);
+})
+</script>
 </head>
 <body>
 
-<p>Author: Andrzej Krzemie&#x144;ski</p>
 
 <h1>Value constraints</h1>
 
+<p>
+ISO/IEC JTC1 SC22 WG21 DXXXX 2014-10-XX
+</p>
+
+<address>
+Andrzej Krzemie&#x144;ski, akrzemi1@gmail.com
+</address>
+
+<p>Project: Programming Language C++, EWG</p>
+
+<h2><a name="intro">Introduction</a></h2>
 
 <p>In this paper we want to analyse how a support for contract programming-like features could be supported in C++. We use a different term "value constraints" to stress that we do not necessarily want to copy solutions that other imperative programming languages adapt. We want to change the focus from how broken contracts are responded to in run-time, to how contract violations can be detected at compile-time. This is a high-level overview of the problem, and we are not even covering the things like sub-contracting or other interactions with OO features.</p>
 
-<h1>Comparison with other contract-programming proposals</h1>
+<h2><a name='toc'>Table of contents</a></h2>
+
+<p id='toc'></p>
+
+<h2>Comparison with other contract-programming proposals</h2>
 
 <p>While <a href="#N1962">[N1962]</a> is a fairly complete proposal for adding contract-programming support to C++, this document offers an analysis of the problem domain rather than making a specific proposal. We focus on identifying expectations, potential implementation difficulties and costs.</p>
 
 <p>All other contract programming proposals that we are aware of &mdash; <a href="#N4075">[N4075]</a>, <a href="#N4110">[N4110]</a> &mdash; start from the assumption that the support for preconditions must be provided in the from of evaluating preconditions before function calls, occasionally disabling these precondition evaluations, and installing broken contract handlers. In this paper, we do not take this assumption for granted. Run-time support is only a subset of the scope of our analysis. We explore in more detail an alternative approach: the focus on static analysis (also indicated in <a href="#N1962">[N1962]</a>).</p>
 
-<h1>What do we need?</h1>
+<h2><a name="what_do_we_need">What do we need?</a></h2>
 
 <p>
 The 'features' we describe here can be collectively called <em>value constraints.</em>
@@ -25,7 +156,7 @@ We want to use them to express in the language that certain combinations of valu
 at certain times are invalid and are intended (and expected) never to occur.</p>
 
 
-<h2>Specify function's domain</h2>
+<h3><a name="what.precond">Specify function's domain</a></h3>
 
 <p>The problem goes back to mathematics. Certain functions are well defined
 only for a subset of values of the input type. For instance, a square root
@@ -103,18 +234,21 @@ for (int i = 0; i != vec.size(); ++i) {
 
 <p>What we need is the ability to declare the function's domain along with the function, so that it is visible to the callers and to the automated tools. How the tools can handle this is a secondary issue, but the behaviour can be: (1) automated documentation generation, (2) additional warnings from static analysers, (3) additional instrumentation injected by compilers, (4) compiler optimizations based on domain declarations, (5) the standard can adopt this notation to more formally specify its preconditions.</p>
 
-<h2>Specify function's range</h2>
+
+
+<h3><a name="what.postcond">Specify function's range</a></h2>
 
 <p>Here, we use term 'range' in the mathematical sense: the set of all possible values that the function can return (a subset of function's co-domain). In the above example with function <code>abs()</code>, a hypothetical tool could detect that expression <code>sqrt(abs(x))</code> is always fine only if it knew that the range of <code>abs</code> is equal (or smaller) than the domain of <code>sqrt</code>. We need to be able to constrain the allowed function output in order for automated tools to be able to verify if other functions' domain requirements are satisfied. </p>
 
 <p>In this case a function author specifies the contract and (likely) the same author guarantees it. Function's user can rely on the guarantee. It is much less likely that this contract is broken, because it is the same person that declares and later ensures the obligation. And conversely, if the author makes an error in the function, he is equally likely to make an error in specifying the contract.</p>
 
 
-<h2>Block-level assertions</h2>
+<h3><a name="what.block_assert">Block-level assertions</a></h3>
 
 <p>This type of value constraint is quite familiar to many C++ user, as it is implemented with macro <code>assert</code> and some similar tools in many libraries. If we think of it as a contract, this time a function author defines it, he ensures that it holds, and he is the benefactor of the contract: he guarantees something to himself, namely that certain state of a block-local variable or set of variables shall never occur at the point of the assertion. At the same time the function author guarantees something that he can be held accountable for, and relies on the guarantee expressed with the assertion.</p>
 
-<h2>Class-level assertions</h2>
+
+<h3><a name="what.class_assert">Class-level assertions</a></h3>
 
 <p>A similar constraint on variables is often required for (non-static) data members of objects of a given class. Consider the following example:</p>
 
@@ -141,8 +275,9 @@ public:
 
 <p>Class-level assertions (or class invariants) could be used as a criterion for good abstractions, much like axioms in concepts. If you cannot specify an invariant, it might be an indication that the design/abstraction may be poor or this should not have been made a class.</p>
 
-<h2>Specify equivalent expressions</h2>
 
+
+<h3><a name="what.equiv">Specify equivalent expressions</a></h3>
 
 <p>Often library interfaces offer more than one way of doing the same thing. For instance, checking if a container contains at least one element can be checked in two ways: <code>cont.empty()</code> and <code>cont.size() != 0</code>. The latter is more general and could be used to check for emptiness, but there are occasions where the former can execute faster. This justifies the existence of the two forms. However, the job of matching one function's domain with other function's co-domain would be severely impeded if either specified the contract with a different (albeit equivalent) expression. Consider:</p>
 
@@ -159,7 +294,7 @@ return vec.front();       <em>// safe?</em>
 
 <p>Can we match what <code>resize</code> guarantees with what <code>front</code> expects? The two expressions are different. It would be much easier if we were able to explicitly declare that for any <code>std::vector</code> expressions <code>vec.empty()</code> and <code>vec.size() != 0</code> are equivalent. This is somewhat similar to class-level assertions, but the declaration applies to more than one class, now we are only interested in the public interfaces, and we can express equivalence between expressions that have side effects. for instance, we can specify that <code>vec.clear()</code> is equivalent to <code>vec.resize(0)</code>. Out of all "constraints" described in this section, this is the only one where term "value constraint" is inadequate. This is a constraint on the semantics of expressions. But we need it for the automated tools to make an effective use of other value constraints.</p>
 
-<h2>Loop variants</h2>
+<h3><a name="what.loop_variant">Loop variants</a></h3>
 
 <p>Note that this is not the same as loop <em>invariant</em> (which can be handled by a block-level invariant). This is somewhat similar to an assertion. It can help convince oneself that a non-trivial loop will ultimately terminate. Sometimes it is not easily seen, because there is no loop counter. We may for instance inspect elements in the collection by skipping some elements, increasing or shrinking, the collection. A loop variant is an expression that evaluates to an integral non-negative number. It is expected that in each loop iteration evaluating this expression renders a number smaller than in the previous iteration. It is also expected that when the value renders zero, the loop terminates.</p>
 
@@ -167,7 +302,7 @@ return vec.front();       <em>// safe?</em>
 
 
 
-<h1>What use can be made of value constraints?</h1>
+<h2><a name="use">What use can be made of value constraints?</a></h2>
 
 <p>Value constraints exist, even though there is no language support for them in the language. We have seen in the above examples that comments were used to convey the information. In this section we list the benefits obtained form standardizing or formalizing value constraints this way or the other.</p>
 
@@ -181,28 +316,30 @@ double sqrt(double x);</pre>
 
 <p>An ideal &mdash; and unrealistic &mdash; support for value constraints is for compiler to check any possible flow in the program and signal a compiler error whenever a breach of the constraint is going to happen. Because this is not doable, the we aim at the support that is not entirely satisfactory, but believed to be better than none.</p>
 
-<h2>Improved documentation</h2>
+<h3><a name="use.doc">Improved documentation</a></h3>
 
 <p>One of the obvious uses of formalized value constraints is the automated generation of documentation. Even if developers do not use any tool for generating documentation, there is still a gain. When a developer sees the declaration of the function she is going to use, she can immediately see the value constraints as well. If they are a language feature, developers are more encouraged to use them (even though comments would do). Since this does not affect program semantics [[attributes]] are sufficient.</p>
 
-<h2>Static analysis</h2>
+<h3><a name="use.analysis">Static analysis</a></h3>
 
 <p>Value constraints could enable static analysers to detect a potential breach of value constraints and issue warnings. Again, using value constraints this way does not affect program semantics, so [[attributes]] would do.</p>
 
-<h2>Constraint-based compiler optimizations</h2>
+
+<h3><a name="use.optimize">Constraint-based compiler optimizations</a></h3>
 
 <p>In that case, compiler is able to arbitrarily change the behaviour of the program in case where a value constraint has been violated. So, adding a value constraint may change the meaning of the program. In this case attributes will not suffice, and we need a language extension for specifying value constraints.</p>
 
-<h2>Auto-generation of runtime checks</h2>
+
+<h3><a name="use.runtime_check">Auto-generation of runtime checks</a></h3>
 
 <p>This is what Eiffel provides and what <a href="#N1962">[N1962]</a> proposes. Value constraints need to be C++ expressions. An implementation can (optionally) inject, at well defined places, a code that evaluates at run-time expressions representing value constraints. If any (boolean) expression evaluates to <code>false</code>, a certain action (like calling <code>std::terminate</code>) is performed. The insertion of additional logic requires that value constraints are introduced as a language feature. In fact even more language and library features is required to control when and how the run-time checks are performed and responded to.</p>
 
 
-<h1>Run-time evaluation of value constraints</h1>
+<h2><a name="runtime">Run-time evaluation of value constraints</a></h2>
 
 <p>In this section we focus on one possible approach: treating value constraints as expressions and evaluating them at run-time.</p>
 
-<h2>Side effects of the expressions</h2>
+<h3><a name="runtime.side_effects">Side effects of the expressions</a></h3>
 
 <p>Using expressions with side effects in value constraints is generally discouraged, but sometimes it might be difficult to spot that we have a side effect. For the purpose of this discussion we also consider run-time overhead, and especially the run-time complexity as a side effect. To minimize the possibility of invoking a function with a side effect <a href="#N1962">[N1962]</a> proposes that only <code>const</code>-qualified member functions are allowed; but even these can modify non-member variables, and it is not only member functions that may need to be used to express value constraints. Ideally, we would like to use only <em>pure</em> (referentially transparent) expressions, but C++ as of today does not offer the possibility of detecting if an expression is pure. Although the definition of relaxed <code>constexpr</code> functions makes a step towards pure functions.</p>
 
@@ -235,7 +372,8 @@ double is_negative(double x)
 
 <p>If we consider value constraints with side effects an 'invalid' code, do we force the compiler to reject every such case with a diagnostic message? If it is impossible in the general case (and so it seams), we have to accept that such code is valid, but do we allow the compiler to reject these cases where it can prove that we have a side effect?</p>
 
-<h2>Value constraints in overloaded functions</h2>
+
+<h3><a name="runtime.overloads">Value constraints in overloaded functions</a></h3>
 
 <p>Consider the following declaration:</p>
 
@@ -253,11 +391,14 @@ void displayFirstSecondNext(InputIter beg, InputIter end);
 
 <p>The above case can be solved by introducing a yet another feature: an annotation that a precondition is only evaluated when some compile-time condition is met: in our case only if the iterator is a <code>ForwardIterator</code>. Note that one global switch (similar to <code>NDEBUG</code>) saying "disable/enable all value constraint evaluations" will not be enough.</p>
 
-<h2>Inadvertent increase in run-time complexity</h2>
+
+<h3><a name="runtime.complexity">Inadvertent increase in run-time complexity</a></h3>
+
+
 <p>There are other reasons for having a more fine grained control of which checks should be enabled. Consider a binary search algorithm. Its runtime complexity is O(log <var>n</var>). It has an obvious precondition that the range we search through is sorted. Performing the sorted check has complexity O(<var>n</var>). Thus by evaluating the precondition, we change the algorithms complexity. This might be unacceptable, even for some debug/testing builds. Runtime complexity is a sort of side effect of an algorithm, and it can be silently added to the function, especially when following a good practise a developer adds an obvious precondition, which would be his primary task, and forgets the secondary task of specifying (using some contract-specific sub-language) the conditions under which this precondition shall be evaluated.</p>
 
 
-<h2>Run-time response to a broken contract</h2>
+<h3><a name="runtime.response">Run-time response to a broken contract</a></h3>
 
 <p><a href="#N1962">[N1962]</a> as well as <a href="#N4075">[N4075]</a> propose that the action taken upon violating a value constraint should be configurable by the programmer. While we agree this should be configurable, we object to the way of achieving this by <code>std::set_terminate</code>-like registering function. Language allows that <code>std::set_terminate</code> can be called multiple times from multiple places: different, possibly dynamically-loaded/shared libraries. This makes sense for <code>std::terminate</code>. Every part of the system may acquire a <em>critical</em> resource: one that has to be released even if "exception handling must be abandoned for less subtle error handling techniques". In that case the component also needs to register an additional clean-up function. In case of broken contract situation, we do not need or want that flexibility. We believe only the person that assembles the final program from the components and libraries, should be empowered to to decide how broken contracts are handled. Only him does have the knowledge if this is a test or a retail build; if the slow-down of some run-time checks can be afforded. Libraries do not know that: they do not know in what environment they will be used.</p>
 
@@ -266,9 +407,9 @@ void displayFirstSecondNext(InputIter beg, InputIter end);
 <p>We are not aware of any mechanism currently available in C++ that would facilitate our needs. But since function <code>main</code> has the property of being required to be defined only once across the executable program, a solution we are leaning towards is to apply some special annotation around function <code>main</code> that would indicate what the user's preference is on the handling of broken contracts.</p>
 
 
-<h2>What can a broken contract handler do?</h2>
+<h3><a name="runtime.handler">What can a broken contract handler do?</a></h3>
 
-<p>The most reasonable default answer appears to be <code>std::terminate</code>, which means "release critical resources and abort". One may wish to override the default in order to do special logging. We believe that it is not a good idea to throw from a broken contract handler. First, throwing an exception is often an action taken inside a function,in a situation where it cannot satisfy the postcondition, to make sure that class invariants are preserved. In other words, if you catch an exception or are in the middle of stack unwinding, you can safely assume that all objects' invariants are satisfied (and you can safely call destructors that may rely on invariants). If it were possible to throw from the handlers, his expectation would be violated. Also, you can imagine functions that are marked as <code>noexcept</code> and still impose a value constraint (which happens to fire). <a href="N4110">[N4110]</a> argues that "the exception can be safely thrown in this case (even if the function is <code>noexcept</code>) as it would be thrown in the caller side and not in the callee side". We disagreewith this reasoning. Consider this example:</p>
+<p>The most reasonable default answer appears to be <code>std::terminate</code>, which means "release critical resources and abort". One may wish to override the default in order to do special logging. We believe that it is not a good idea to throw from a broken contract handler. First, throwing an exception is often an action taken inside a function,in a situation where it cannot satisfy the postcondition, to make sure that class invariants are preserved. In other words, if you catch an exception or are in the middle of stack unwinding, you can safely assume that all objects' invariants are satisfied (and you can safely call destructors that may rely on invariants). If it were possible to throw from the handlers, his expectation would be violated. Also, you can imagine functions that are marked as <code>noexcept</code> and still impose a value constraint (which happens to fire). <a href="N4110">[N4110]</a> argues that "the exception can be safely thrown in this case (even if the function is <code>noexcept</code>) as it would be thrown in the caller side and not in the callee side". We disagree with this reasoning. Consider this example:</p>
 
 <pre>bool positive_predicate(int i) noexcept <em>/* requires: i &gt; 0 */</em>;
 bool predicate(int i) noexcept  <em>/* requires: true */</em>
@@ -283,12 +424,13 @@ bool predicate(int i) noexcept  <em>/* requires: true */</em>
 
 <p>The recommendations from <a href="N3248">[N3248]</a> (that functions with narrow contract should not be defined as <code>noexcept</code>) may also apply in the case of value constraints development. We consider it an open issue.</p>
 
-<h2>Disabling run-time checks</h2>
+
+<h3><a name="runtime.disable">Disabling run-time checks</a></h3>
 
 <p>Unlike with the static analysis approach, evaluating value constraints adds run-time overhead. Wile the overhead is acceptable in some cases, it is desirable to be able to globally disable the checks in other cases. This issue is similar to C-style <code>assert</code>s, which can be retained in debug/test builds but removed in release builds. C-style <code>assert</code>s are disabled by recompiling the entire program; this includes all 3rd party libraries, or linking with the alternative pre-compiled versions. Can this be made better for language-level value constraints? <a href="N1800">[N1800]</a> suggests an implementation (for preconditions) that could be capable of handling such requirement: each function has two entry points: first that checks the precondition and then evaluates the function, second that skips the evaluation of the precondition. Once you have the two entry points it is just the question of changing the addresses. This solution results in bigger libraries although the final executables could be optimized.</p>
 
 
-<h1>Assisting static analysis</h1>
+<h2><a name="static">Assisting static analysis</a></h2>
 
 <p>Automated tools already perform static analysis, even without any support from the programmer. However, additional hints from developers could enable even further analysis, or enable vendors to add analysis in compilers at lower expense. In the example like the following, a compiler can fairly easily detect that a potential undefined behaviour is at hand:</p>
 
@@ -331,7 +473,7 @@ void test(Vector &amp; vec)
 <p>However, an analysis like this can produce too many false warnings. This calls for another [[attribute]] for indicating that the programmer doesn't want certain parts of the code to be warned about potential value constraint violations.</p>
 
 
-<h2>How long does a condition hold?</h2>
+<h3><a name="static.how_long">How long does a condition hold?</a></h3>
 
 <p>We illustrate the issue in question with the following two examples.</p>
 
@@ -357,7 +499,7 @@ std::sort(b, e);      <em>// requires: valid_range(b, e)</em>
 <p>Even if the analyser knows that <code>vec.begin()</code> and <code>vec.end()</code> form a valid range, they are a non-<code>const</code> operations and invalidate any assumptions about their value/state. Any language feature for assisting static analysis must provide a way of specifying which operations invalidate which conditions (e.g., a way of declaring some functions as non-modifying even when they are non-<code>const</code>). But this is likely to make the specifications very complicated, and discourage everybody from using the feature.</p>
 
 
-<h1>"Properties": a hypothetical language feature</h1>
+<h2><a name="properties">"Properties": a hypothetical language feature</a></h2>
 
 <p>In this section we describe a language feature that would enable defining value constraints in a somewhat different way than the "imperative" approach described in <a href="#N1962">[N1962]</a>. We call it <em>properties</em>, which have been described in <a href="#N3351">[N3351]</a>. A property is a new kind of "entity" in the language: it is neither an object, nor a function, it is just something else. It is introduced by an invented keyword "<code>property</code>":</p>
 
@@ -404,9 +546,9 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 <p>We do not propose to add such properties to the language. We just want to show a different perspective on value constraints. <a href="#N1962">[N1962]</a> also offers this perspective, but we fear that the focus on broken contract handlers and the order of evaluation of different value constraints, might have obfuscated this idea. A similar effect (as having properties) could be achieved by annotating some value constraints (which use normal expressions) that they must never be evaluated. </p>
 
 
-<h1>Interactions with other C++ features</h1>
+<h2><a name="interactions">Interactions with other C++ features</a></h2>
 
-<h2>When should precondition hold?</h2>
+<h3><a name="interactions.when_to_hold">When should precondition hold?</a></h3>
 
 <p>A common answer to this question is "after function parameters have been initialized, before its first instruction is executed." While it looks good in typical simple examples, consider the following case:</p>
 
@@ -422,14 +564,14 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 <p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused an undefined behaviour later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
 
 
-<h2><code>constexpr</code> functions and literal types</h2>
+<h3><a name="interactions.constexpr"><code>constexpr</code> functions and literal types</a></h3>
 
 <p><code>constexpr</code> functions can be evaluated at run-time or at compile-time. Ideally, a compile-time evaluation of such function should result in compile-time error when its precondition or postcondition is broken. This is possible if expressions in preconditions and postconditions are core constant expressions. It appears reasonable to require that <code>constexpr</code> functions have only <code>constexpr</code> value constraints.</p>
 
 <p>A similar question needs to be answered for literal types and invariants. For literal types it is required that they have at least one non-copy/move <code>constexpr</code> constructor. This constructor can be used to create a compile-time constant, whose invariant is expected to hold. This may require that the invariant should also be <code>constexpr</code>, as otherwise it is impossible to verify it at compile time. On the other hand, the interface of user-defined literal types can be divided into compile-time (<code>constexpr</code>) and run-time part. The effects of the other one may alter other parts of the program state that may only be invariant-verified with run-time expressions. More, some constructors are <code>constexpr</code> even for non-literal classes: their purpose is to guarantee the static initialization of global objects. It is not clear if this should affect the <code>constexpr</code> requirement on the class invariant.</p>
 
 
-<h2>Function's public interface</h2>
+<h3><a name="interactions.public_iface">Function's public interface</a></h3>
 
 <p>For the purpose of specifying the semantics of value constrains, we may need to redefine the concept of class's public interface. Consider the following definition:</p>
 
@@ -448,7 +590,7 @@ private:
 <p>At this point we are not sure if it is sufficient to define class's public interface as the set of its public member functions and its friend functions. An additional way of specifying what is class's public interface may be necessary. This is a problem not limited to value constraints. Such specification could be useful for enabling a more fine-grained function lookup rule. Current ADL is known to pick too many overloads.</p>
 
 
-<h2>When should a class invariant hold?</h2>
+<h3><a name="interactions.when_invariant_holds">When should a class invariant hold?</a></h3>
 
 <p>When is class invariant supposed to hold? Objects are manipulated via class's <em>public interface</em>. Functions from class's public interface (public functions or friend functions) often need to compromise the invariant, but they always put the invariant back when they finish -- even via an exception. This means that as long as no function from the object's public interface is being invoked on it, or any of its subobjects manipulated, the object's invariant should hold. Consider:</p>
 
@@ -466,7 +608,7 @@ _4:;</pre>
 <p>This is different from the common notion that invariants should hold before entering any public function or destructor and after leaving any public member function or constructor. For instance, inside a public function you can invoke other public functions and around these nested calls you do not expect the invariant to hold. And conversely, an invariant should hold at <em>any</em> time between the calls to public interface. Putting the run-time checks in thus identified places is impossible, which proves that the approach "check before and after the call to any public member functions" are the consequence of implementation limitations -- not the definition of a class invariant. This also shows that run-time checks are not enough to guarantee the safety of the program: static analysis may be required to complement them.</p>
 
 
-<h2>Composing invariants</h2>
+<h3><a name="interactions.compose_invariants">Composing invariants</a></h3>
 
 <p>Given some class <code>D</code>, apart from its "direct" invariant, we expect that invariants of <code>D</code>'s bases classes and <code>D</code>'s data members also hold. This can be implicit, you do not have to make recursive definitions yourself, similarly like you do not have to specify in the destructor which subobject's destructors need to be called. But this does not cover all cases. Consider class <code>optional</code> (similar to Boost.Optional), it can be implemented as follows:
 
@@ -509,7 +651,7 @@ Obviously, we store (sometimes) an object of type <code>T</code> inside, but it 
 <p>Another open question is if we should check invariants of member subobjects if they are references (and therefore do not pertain to the master object’s value).</p>
 
 
-<h2>Protected members</h2>
+<h3><a name="interactions.protected">Protected members</a></h3>
 
 <p>Can protected member functions be called in pre- and post-conditions? In public functions, this makes no sense: the user of the class may not have access to protected functions; and it is expected that the user in order to verify if a precondition holds should be able to evaluate the condition herself.</p>
 
@@ -519,26 +661,29 @@ Obviously, we store (sometimes) an object of type <code>T</code> inside, but it 
 
 
 
-<h1>Constraining STL</h1>
+<h2><a name="stl_test">Constraining STL</a></h2>
 
 <p>As a usefulness test, any proposed value constraint framework should be checked if it is able to express value constraints in STL. We consider some selected examples. We do not insist that a proposed framework should be able to handle them, but consider it rather a test of expressive power. The goal is to help determine where we want to stop in expressing the semantics in the language.</p> 
 
-<h2>Case 1: a valid range</h2>
+
+<h3><a name="stl_test.case_1">Case 1: a valid range</a></h3>
+
 <p>This is probably the most difficult one to handle. Nearly any algorithm on STL ranges requires that <code>end</code> is reachable from <code>begin</code>. It cannot be validated by executing any expression. This is why it is required as a precondition: the caller may have better means of ensuring that this requirement is satisfied. For instance, it is obvious that <code>c.begin()</code> and <code>c.end()</code> called on any STL container form a valid range. Is a value constraints framework capable of expressing that the values of <code>c.begin()</code> and <code>c.end()</code> satisfy the requirements of, say, <code>std::for_each</code>?</p>
 
-<h2>Case 2: sub-ranges</h2>
-Similarly, in the call <code>m = std::find_if(b, e, p)</code>, assuming that <code>b</code> and <code>e</code> form a valid range, can it be verified or even expressed that <code>b</code> and <code>m</code> as well as <code>m</code> and <code>e</code> form valid ranges and that these combinations should satisfy the requirement of subsequent STL algorithms about valid ranges?
+<h3><a name="stl_test.case_2">Case 2: sub-ranges</a></h3>
+
+<p>Similarly, in the call <code>m = std::find_if(b, e, p)</code>, assuming that <code>b</code> and <code>e</code> form a valid range, can it be verified or even expressed that <code>b</code> and <code>m</code> as well as <code>m</code> and <code>e</code> form valid ranges and that these combinations should satisfy the requirement of subsequent STL algorithms about valid ranges?</p>
 
 
-<h2>Case 3: sorting</h2>
+<h3><a name="stl_test.case_3">Case 3: sorting</a></h3>
 
 <p>Consider functions <code>sort</code> and <code>binary_search</code> from the Standard Library (we consider only the overloads with the predicate). The former guarantees that it leaves the range sorted with respect to the given predicate. The later requires that the range is <em>partitioned</em> with respect to the given predicate and the given element. Being partitioned is something less than being sorted. for instance range {3, 1, 2, 5, 9, 8, 7} is partitioned with respect to element 5 and <code>operator&lt;</code> but is not sorted.<p>
 
-<h2>Solution with properties and axioms</h2>
+<h3><a name="stl_test.solution">Solution with properties and axioms</a></h3>
 
 Below we show how the above task can be solved with sophisticated features like properties (described above) and axioms (similar to those described in <a href="#N2887">[N2887]</a>).
 
-<h3>Case 1</h3>
+<h4><a name="stl_test.solution.case_1">Case 1</a></h4>
 
 <pre>template &lt;typename I&gt;
 property bool is_valid_range(I b, I e);
@@ -557,7 +702,7 @@ vector&lt;int&gt; v = {/*...*/};
 sort(v.begin(), v.end());
 </pre> 
 
-<h3>Case 2</h3>
+<h4><a name="stl_test.solution.case_2">Case 2</a></h4>
 
 <pre>template&lt;typename I, typename V&gt;
 I find(I b, I e, V v)
@@ -573,7 +718,7 @@ auto i = find(v.begin(), v.end(), 7); // axiom vec_range
 auto j = find(i, v.end(), 7);         // postcondition of find
 </pre>
 
-<h3>Case 3</h3>
+<h4><a name="stl_test.solution.case_3">Case 3</a></h4>
 
 <pre>template &lt;typename It, typename T, typename Comp&gt;
 bool is_partitioned_for_element(It b, It e, T v, Comp c)
@@ -604,13 +749,13 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
   
 
   
-<h1>What do we need to standardize?</h1>
+<h2><a name="what_to_standardize">What do we need to standardize?</a></h2>
 
 
 <p>The language feature of value constraints can be divided into two main parts. (1) What value constraints we define and how, (2) how do we handle run-time response to a broken value constraint.</p>
 
 
-<h2>Defining value constraints</h2>
+<h3><a name="what_to_standardize.constraints">Defining value constraints</a></h3>
 
 <p>At this point it is too early to decide on the details, but one thing appears fairly uncontroversial. Value constraints support needs to accommodate two fairly opposite requirements: (1) no run-time overhead in cases like (<code>operator[]</code> for vectors),  (2) guaranteed (in certain situations) evaluation of the predicates (where performance requirement is not critical).</p>
 
@@ -623,7 +768,7 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 <p>One thing that appears non-controversial is that declarations of preconditions and postconditions need to be part of function declaration, so that they are accessible by the function users who may not have access to function definitions. We leave it open whether a value constraint declaration should affect function's signature or type or affect the overload resolution mechanism; although it looks like affecting function's type would make it impossible to retrofit value constraints into the existing code.</p>
 
 
-<h2>Run-time response</h2>
+<h3><a name="what_to_standardize.runtime_response">Run-time response</a></h3>
 
 <p>One option is not to standardize what should happen when we detect at run-time a broken value constraint (whether to throw or terminate or abort or ignore), and let the vendors decide how they want to handle these cases. With this approach a minimum conforming implementation only needs to syntax- and type-check the declarations.</p>
 
@@ -631,7 +776,7 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <p>It may be useful to standardize a set of [[attributes]] for giving hints on what conditions to evaluate value constraints, e.g., "evaluate only if <code>T</code> satisfies some requirements", or "this constraint has complexity O(N), evaluate it only when O(N) and bigger complexities are enabled", "never evaluate this precondition", or "never evaluate this function if it is in a value constraint".</p>
 
-<h1>Acknowledgements</h1>
+<h2><a name="acknowledgements">Acknowledgements</a></h2>
 
 <p>Lots of content in this paper is inspired by work in <a href="#N1962">[N1962]</a>, <a href="#N2887">[N2887]</a> and <a href="#N3351">[N3351]</a>.</p>
 
@@ -641,7 +786,7 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <p>Jo&euml;l Lamotte offered a number of useful suggestions that improved the quality of the paper.</p>
 
-<h1>References</h1>
+<h2><a name="refs">References</a></h2>
 
 <ul>
 <li><a name="ACSL">[ACSL]</a> Patrick Baudin, Pascal Cuoq, Jean-Christophe Filli&acirc;tre, Claude March&eacute;, Benjamin Monate, Yannick Moy, Virgile Prevosto, "ACSL: ANSI/ISO C Specification Language" (<a href="http://frama-c.com/download/acsl_1.4.pdf">http://frama-c.com/download/acsl_1.4.pdf</a>),</li>
