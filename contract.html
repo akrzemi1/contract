@@ -776,6 +776,12 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <p>It may be useful to standardize a set of [[attributes]] for giving hints on what conditions to evaluate value constraints, e.g., "evaluate only if <code>T</code> satisfies some requirements", or "this constraint has complexity O(N), evaluate it only when O(N) and bigger complexities are enabled", "never evaluate this precondition", or "never evaluate this function if it is in a value constraint".</p>
 
+
+<h2><a name="implementability">Implementability</a></h2>
+
+<p>In this paper we have discussed two uses of value constraint declarations: run-time checks and static analysis. Auto-generation of run-time checks has already been implemented in a couple of languages, e.g., in Eiffel and D. To a great extent it has even been implemented in C++ as a library (see <a href="#CONTRACTPP">[CONTRACTPP]</a>). However, the idea of inserting time-consuming run-time checks to a performance-critical program may not be the right route for C++. Regarding static analysis, some languages for defining and exploiting value constraints have been used for languages like C (see <a href="#ACSL">[ACSL]</a>), we are not aware of any attempt at implementing a useful system it for C++ with its templates and the Standard Template Library with its constraints. Of course, the minimum implementation would only need to type-check the declarations, but for that we do not need to standardize the constraints. We do not know if the constraints would really help improve static analysis beyond what current analysers already do (with no help from programmers), and we will not know until a tool like this with its own language for constraints is built.</p>
+
+
 <h2><a name="acknowledgements">Acknowledgements</a></h2>
 
 <p>Lots of content in this paper is inspired by work in <a href="#N1962">[N1962]</a>, <a href="#N2887">[N2887]</a> and <a href="#N3351">[N3351]</a>.</p>
@@ -797,7 +803,8 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 <li><a name="N3351">[N3351]</a> Bjarne Stroustrup, Andrew Sutton et al., "A Concept Design for the STL" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf</a>),</li>
 <li><a name="N4075">[N4075]</a> John Lakos, Alexei Zakharov, Alexander Beels, "Centralized Defensive-Programming Support for Narrow Contracts (Revision 6)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf</a>),</li>
 <li><a name="N4110">[N4110]</a> J. Daniel Garcia, "Exploring the design space of contract specifications for C++" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf</a>),</li>
-<li><a name="SPECS">[SPECS]</a> K. Rustan M. Leino, Peter M&uuml;ller, "Using the Spec# Language, Methodology, and Tools to Write Bug-Free Programs" (<a href="http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056">http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056</a>).</li>
+<li><a name="SPECS">[SPECS]</a> K. Rustan M. Leino, Peter M&uuml;ller, "Using the Spec# Language, Methodology, and Tools to Write Bug-Free Programs" (<a href="http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056">http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056</a>),</li>
+<li><a name="CONTRACTPP">[CONTRACTPP]</a> Lorenzo Caminiti, Contract++ (<a href="https://svn.boost.org/svn/boost/sandbox/contractpp/doc/html/index.html">https://svn.boost.org/svn/boost/sandbox/contractpp/doc/html/index.html</a>).</li>
 
 </ul>
 
