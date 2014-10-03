@@ -271,7 +271,7 @@ public:
 };
 </pre>
 
-<p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return). Also, in case of thread or context switching, if a function decides to temporarily break such class-scope assertion, it must guard this action with a lock or equivalent, so that other threads do not see an object with a broken contract.</p>
+<p>Note the three comments at the bottom. They are something that could be expressed with macro <code>assert</code>, except that <code>assert</code> is an expression and cannot be put at the class scope. Note also that members <code>wgt1_</code> and <code>wgt2_</code> are private. So, we are not declaring anything to the outside world. Word "always" needs to be more formal. It applies to any object of this class whose life time has begun and have not yet ended, except that member functions can temporarily compromise it provided that they restore it upon exit (either via exception or a normal return). </p>
 
 <p>Class-level assertions (or class invariants) could be used as a criterion for good abstractions, much like axioms in concepts. If you cannot specify an invariant, it might be an indication that the design/abstraction may be poor or this should not have been made a class.</p>
 
@@ -301,6 +301,9 @@ return vec.front();       <em>// safe?</em>
 <p>A framework for supporting value constraints need not address all the above needs. We believe that only supporting the declaration of function domain is a big help in itself. Note that while assertions loop variants need to work with expressions, the features for specifying function domain and co-domain need not necessarily use expressions. We address this in detail in the later sections.</p>
 
 
+<h3><a name="what.relax">Relaxations of implied function domain</a></h3>
+
+<p>Consider <code>std::set_intersection</code>: it takes two "input" ranges and one "output" range as its input. The Standard requires that neither of the "input" ranges shall overlap with the "output" range. However, it is possible to make an implementation that works even if such overlap exists. Suppose one vendor wants to offer the implementation that allows overlapping on input, and he wants to commit to allowing it in the future releases of the library. He "relaxes" the requirements that every user may (an should) suspect are there (even if not mentioned explicitly). It is a useful annotation that can help the user decide to use the algorithm (if the user doesn't need a cross-platform code).  </p>
 
 <h2><a name="use">What use can be made of value constraints?</a></h2>
 
@@ -553,8 +556,8 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 <p>A common answer to this question is "after function parameters have been initialized, before its first instruction is executed." While it looks good in typical simple examples, consider the following case:</p>
 
 <pre>void fun(Tool * const tool, int const i)
-// requires: tool != nullptr
-// requires: tool-&gt;value() &gt;= 0;
+<em>// requires: tool != nullptr</em>
+<em>// requires: tool-&gt;value() &gt;= 0;</em>
 {
   line_1: int j = transform(i); 
   line_2: int k = process(tool-&gt;value());
@@ -563,6 +566,19 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 
 <p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused an undefined behaviour later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
 
+<p>On the other hand, the following scenario appears to be all fine:</p>
+
+<pre>double fun(double x)
+<em>// requires: x &gt;= 0.0</em>
+{
+    double v = sqrt(x);
+    if (v &gt; MAX)
+      x = -x;
+    return do_something_with(v, x);
+}
+</pre>
+
+<p>In the conditional assignment we set the value of <code>x</code> to something that would have broken the precondition on entry; but now that we are reusing the variable we no longer care about the constraint.</p>
 
 <h3><a name="interactions.constexpr"><code>constexpr</code> functions and literal types</a></h3>
 
@@ -646,7 +662,6 @@ Obviously, we store (sometimes) an object of type <code>T</code> inside, but it 
 
 <p>This issue does not appear if we adopted the view that invariants hold immediately before and after the call to public interface functions. But we do not constrain our analysis to this "run-time checks" view.</p>
 
-<p>This also implies that when two threads run concurrently and one is in the middle of modifying object <code>x</code>, the other thread should not be able to see the partial state of <code>x</code> in which the invariant does not hold.</p>
  
 <p>Another open question is if we should check invariants of member subobjects if they are references (and therefore do not pertain to the master object’s value).</p>
 
@@ -777,6 +792,30 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 <p>It may be useful to standardize a set of [[attributes]] for giving hints on what conditions to evaluate value constraints, e.g., "evaluate only if <code>T</code> satisfies some requirements", or "this constraint has complexity O(N), evaluate it only when O(N) and bigger complexities are enabled", "never evaluate this precondition", or "never evaluate this function if it is in a value constraint".</p>
 
 
+<h2><a name="concerns">Concerns</a></h2>
+
+<p>Static analysers exist today and apparently they do not need these value constraint declarations. To some extent they can infer the constraints from the implementation. It is not clear to how extent value constraints will help the analysis. Even if constraints for STL can be formalized, it is not clear if any analyser will want to perform this deep analysis. We cannot predict how useful this will be in practice. On the other hand, giving names to constraints may render the messages from the analyser more friendly to the users.</p>
+
+<p>Another concern that we have is that if we combine all kinds of possible function contract, like concepts, value constraints, conditions on these constraints, the declarations could become unbearably long. Reconsider the example of <code>std::find</code> from above. In order to make it short, we made it incorrect. The postcondition cannot be defined for non-<code>ForwardIterator</code> types. If we tried to really constrain <code>std::find</code>, (using some invented syntax and assuming Concepts Lite, and the new Range design being proposed (see <a href="#N4128">[N4128]</a>)) it would go:</p>
+
+<pre>template&lt;InputIterator I, Regular S, Regular V&gt;
+  requires EqualityComparable&lt;I, S&gt; &amp;&amp; EqualityComparable&lt;Value_type&lt;I&gt;, V&gt;
+I find(I b, S e, const V&amp; v)
+precondition{ is_valid_range(b, e); }
+postcondition(f) {
+  is_valid_range(b, f)
+    requires ForwardIterator&lt;I&gt;;
+  is_valid_range(f, e);
+  [[contract::never_evaluate]]
+  none_of(b, f, [](const Value_type&lt;I&gt;&amp; x){x == v})
+    requires ForwardIterator&lt;I&gt;;
+  [[contract::complexity(constant)]]
+  f == e || *f == v 
+    requires ForwardIterator&lt;I&gt;;
+};</pre>
+
+<p>Does this declaration not look scary?</p>
+
 <h2><a name="implementability">Implementability</a></h2>
 
 <p>In this paper we have discussed two uses of value constraint declarations: run-time checks and static analysis. Auto-generation of run-time checks has already been implemented in a couple of languages, e.g., in Eiffel and D. To a great extent it has even been implemented in C++ as a library (see <a href="#CONTRACTPP">[CONTRACTPP]</a>). However, the idea of inserting time-consuming run-time checks to a performance-critical program may not be the right route for C++. Regarding static analysis, some languages for defining and exploiting value constraints have been used for languages like C (see <a href="#ACSL">[ACSL]</a>), we are not aware of any attempt at implementing a useful system it for C++ with its templates and the Standard Template Library with its constraints. Of course, the minimum implementation would only need to type-check the declarations, but for that we do not need to standardize the constraints. We do not know if the constraints would really help improve static analysis beyond what current analysers already do (with no help from programmers), and we will not know until a tool like this with its own language for constraints is built.</p>
@@ -790,7 +829,7 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 
 <p>Gabriel Dos Reis suggested the "STL test" for a precondition framework.</p>
 
-<p>Jo&euml;l Lamotte offered a number of useful suggestions that improved the quality of the paper.</p>
+<p>Jo&euml;l Lamotte and Tomasz Kami&#x144;ski offered a number of useful suggestions that improved the quality of the paper.</p>
 
 <h2><a name="refs">References</a></h2>
 
@@ -803,6 +842,7 @@ precondition{ is_partitioned_for_element(b, e, v, cmp) };
 <li><a name="N3351">[N3351]</a> Bjarne Stroustrup, Andrew Sutton et al., "A Concept Design for the STL" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf</a>),</li>
 <li><a name="N4075">[N4075]</a> John Lakos, Alexei Zakharov, Alexander Beels, "Centralized Defensive-Programming Support for Narrow Contracts (Revision 6)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf</a>),</li>
 <li><a name="N4110">[N4110]</a> J. Daniel Garcia, "Exploring the design space of contract specifications for C++" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf</a>),</li>
+<li><a name="N4128">[N4128]</a> Eric Niebler, "Ranges for the Standard Library, Revision 1" (<a href="https://github.com/ericniebler/range-v3/blob/master/doc/D4128.md">https://github.com/ericniebler/range-v3/blob/master/doc/D4128.md</a>),</li>
 <li><a name="SPECS">[SPECS]</a> K. Rustan M. Leino, Peter M&uuml;ller, "Using the Spec# Language, Methodology, and Tools to Write Bug-Free Programs" (<a href="http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056">http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056</a>),</li>
 <li><a name="CONTRACTPP">[CONTRACTPP]</a> Lorenzo Caminiti, Contract++ (<a href="https://svn.boost.org/svn/boost/sandbox/contractpp/doc/html/index.html">https://svn.boost.org/svn/boost/sandbox/contractpp/doc/html/index.html</a>).</li>
 
