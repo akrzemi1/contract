@@ -125,7 +125,7 @@ td { text-align: left; vertical-align: top;
 <h1>Value constraints</h1>
 
 <p>
-ISO/IEC JTC1 SC22 WG21 DXXXX 2014-10-XX
+ISO/IEC JTC1 SC22 WG21 N4160 2014-10-03
 </p>
 
 <address>
@@ -213,9 +213,9 @@ double sqrt(double x)
 }
 </pre>
 
-<p>This uses Newton's Iteration algorithm. The loop will terminate when values <code>y</code> and <code>prev_y</code> become close enough. They will only do that when <code>x</code> is non-negative. Supplying a negative value will make the loop run forever and hang the program. Another adverse effect of supplying an argument the function is not prepared for is an undefined behaviour (e.g., when providing a too large index to <code>vector::operator[]</code>). Another is the risk of function returning a result that has no meaningful interpretation.</code><p>
+<p>This uses Newton's Iteration algorithm. The loop will terminate when values <code>y</code> and <code>prev_y</code> become close enough. They will only do that when <code>x</code> is non-negative. Supplying a negative value will make the loop run forever and hang the program. Another adverse effect of supplying an argument the function is not prepared for is an undefined behaviour (e.g., when providing a too large index to <code>vector::operator[]</code>). Another is the risk of function returning a result that has no meaningful interpretation.</p>
   
-</p>Note that in the example above even a clever analyser is unlikely to detect from the function body that passing a negative input to this function is something wrong. Thus we cannot say that checking such condition is only the Quality-of-Implementation issue. But everything is fine as long as no negative number is passed in. 'Announcing' that the function is not prepared for just any input is informal: it is either written in the comment, or in paper or html documentation, or only spread by word, or assumed to be obvious. This risks an unintended negative program behaviour, like a halt, or an undefined behaviour. However, it is often preferred because of performance and inability to come up with a reasonable fall-back action. Consider <code>std::vector::operator[]</code>, it does not check the bounds for performance reasons. If it was used in the following code:</p>
+<p>Note that in the example above even a clever analyser is unlikely to detect from the function body that passing a negative input to this function is something wrong. Thus we cannot say that checking such condition is only the Quality-of-Implementation issue. But everything is fine as long as no negative number is passed in. 'Announcing' that the function is not prepared for just any input is informal: it is either written in the comment, or in paper or html documentation, or only spread by word, or assumed to be obvious. This risks an unintended negative program behaviour, like a halt, or an undefined behaviour. However, it is often preferred because of performance and inability to come up with a reasonable fall-back action. Consider <code>std::vector::operator[]</code>, it does not check the bounds for performance reasons. If it was used in the following code:</p>
 
 <pre>
 for (int i = 0; i != vec.size(); ++i) {
@@ -236,7 +236,7 @@ for (int i = 0; i != vec.size(); ++i) {
 
 
 
-<h3><a name="what.postcond">Specify function's range</a></h2>
+<h3><a name="what.postcond">Specify function's range</a></h3>
 
 <p>Here, we use term 'range' in the mathematical sense: the set of all possible values that the function can return (a subset of function's co-domain). In the above example with function <code>abs()</code>, a hypothetical tool could detect that expression <code>sqrt(abs(x))</code> is always fine only if it knew that the range of <code>abs</code> is equal (or smaller) than the domain of <code>sqrt</code>. We need to be able to constrain the allowed function output in order for automated tools to be able to verify if other functions' domain requirements are satisfied. </p>
 
@@ -564,7 +564,7 @@ void sort(Iter begin, Iter end) // pre: valid_range(this-&gt;begin(), this-&gt;e
 }
 </pre>
 
-<p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it)</code>. While the precondition held upon entry, the same condition caused an undefined behaviour later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
+<p>A precondition constrains the state of a remote object of type <code>Tool</code>, its state can change asynchronously. Suppose we can evaluate the precondition upon entering the function. We determine that it is satisfied. We successfully execute instruction <code>line_1</code>, we will now proceed to instruction <code>line_2</code>. It is only now that we really need the precondition to hold, but by now the state of the remote object referred to by pointer <code>tool</code> might have already changed (perhaps function <code>transform</code> modified it). While the precondition held upon entry, the same condition caused an undefined behaviour later on. Even if one argues that function must not break the precondition itself, one should still consider the possibility that while executing <code>line_1</code> another thread may concurrently update the object referred to by <code>tool</code>. So, should precondition hold for the entire duration of its function? Or is it a bad idea to express a constrain on remote objects that we do not obtain by value? We do not have a ready answer for this question, but the question is very important, because this kind of interface is used in STL algorithms: they obtain and return iterators, which are handles to remote parts likely aliased and accessible by other threads.</p>
 
 <p>On the other hand, the following scenario appears to be all fine:</p>
 
@@ -692,11 +692,11 @@ Obviously, we store (sometimes) an object of type <code>T</code> inside, but it 
 
 <h3><a name="stl_test.case_3">Case 3: sorting</a></h3>
 
-<p>Consider functions <code>sort</code> and <code>binary_search</code> from the Standard Library (we consider only the overloads with the predicate). The former guarantees that it leaves the range sorted with respect to the given predicate. The later requires that the range is <em>partitioned</em> with respect to the given predicate and the given element. Being partitioned is something less than being sorted. for instance range {3, 1, 2, 5, 9, 8, 7} is partitioned with respect to element 5 and <code>operator&lt;</code> but is not sorted.<p>
+<p>Consider functions <code>sort</code> and <code>binary_search</code> from the Standard Library (we consider only the overloads with the predicate). The former guarantees that it leaves the range sorted with respect to the given predicate. The later requires that the range is <em>partitioned</em> with respect to the given predicate and the given element. Being partitioned is something less than being sorted. for instance range {3, 1, 2, 5, 9, 8, 7} is partitioned with respect to predicate <code>[](int&nbsp;i){return&nbsp;i&lt;5;}</code> but is not sorted.<p>
 
 <h3><a name="stl_test.solution">Solution with properties and axioms</a></h3>
 
-Below we show how the above task can be solved with sophisticated features like properties (described above) and axioms (similar to those described in <a href="#N2887">[N2887]</a>).
+<p>Below we show how the above task can be solved with sophisticated features like properties (described above) and axioms (similar to those described in <a href="#N2887">[N2887]</a>).
 
 <h4><a name="stl_test.solution.case_1">Case 1</a></h4>
 
@@ -838,12 +838,12 @@ postcondition(f) {
 <li><a name="N1800">[N1800]</a> Lawrence Crowl, Thorsten Ottosen, "Contract Programming For C++0x" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1800.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2005/n1800.pdf</a>),</li>
 <li><a name="N1962">[N1962]</a> Lawrence Crowl, Thorsten Ottosen, "Proposal to add Contract Programming to C++ (revision 4)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2006/n1962.html</a>),</li>
 <li><a name="N2887">[N2887]</a> Gabriel Dos Reis, Bjarne Stroustrup, Alisdair Meredith, "Axioms: Semantics Aspects of C++ Concepts" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2887.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2009/n2887.pdf</a>),</li>
-<li><a name="N3248">[N3248] Alisdair Meredith, John Lakos, "<code>noexcept</code> Prevents Library Validation" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2011/n3248.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2011/n3248.pdf</a>)</li>
+<li><a name="N3248">[N3248]</a> Alisdair Meredith, John Lakos, "<code>noexcept</code> Prevents Library Validation" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2011/n3248.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2011/n3248.pdf</a>)</li>
 <li><a name="N3351">[N3351]</a> Bjarne Stroustrup, Andrew Sutton et al., "A Concept Design for the STL" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3351.pdf</a>),</li>
 <li><a name="N4075">[N4075]</a> John Lakos, Alexei Zakharov, Alexander Beels, "Centralized Defensive-Programming Support for Narrow Contracts (Revision 6)" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4075.pdf</a>),</li>
 <li><a name="N4110">[N4110]</a> J. Daniel Garcia, "Exploring the design space of contract specifications for C++" (<a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf">http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2014/n4110.pdf</a>),</li>
 <li><a name="N4128">[N4128]</a> Eric Niebler, "Ranges for the Standard Library, Revision 1" (<a href="https://github.com/ericniebler/range-v3/blob/master/doc/D4128.md">https://github.com/ericniebler/range-v3/blob/master/doc/D4128.md</a>),</li>
-<li><a name="SPECS">[SPECS]</a> K. Rustan M. Leino, Peter M&uuml;ller, "Using the Spec# Language, Methodology, and Tools to Write Bug-Free Programs" (<a href="http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056">http://www.codeplex.com/Download?ProjectName=specsharp&DownloadId=84056</a>),</li>
+<li><a name="SPECS">[SPECS]</a> K. Rustan M. Leino, Peter M&uuml;ller, "Using the Spec# Language, Methodology, and Tools to Write Bug-Free Programs" (<a href="http://www.codeplex.com/Download?ProjectName=specsharp&amp;DownloadId=84056">http://www.codeplex.com/Download?ProjectName=specsharp&amp;DownloadId=84056</a>),</li>
 <li><a name="CONTRACTPP">[CONTRACTPP]</a> Lorenzo Caminiti, Contract++ (<a href="https://svn.boost.org/svn/boost/sandbox/contractpp/doc/html/index.html">https://svn.boost.org/svn/boost/sandbox/contractpp/doc/html/index.html</a>).</li>
 
 </ul>
